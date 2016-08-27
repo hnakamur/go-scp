@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 )
 
@@ -33,56 +35,25 @@ func run() error {
 	}
 
 	err = func() error {
-		defer stdin.Close()
-		defer stdout.Close()
+		s := newSource(stdin, stdout)
+		defer s.close()
 
-		reader := bufio.NewReader(stdout)
-
+		mode := os.FileMode(0644)
 		filename := "test1"
 		content := "content1\n"
-		fmt.Fprintf(stdin, "C0649 %d %s\n", len(content), filename)
-		fmt.Fprintf(stdin, "%s", content)
-		fmt.Fprint(stdin, "\x00")
-
-		b, msg, err := readReply(reader)
+		err := s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
 		if err != nil {
 			return err
 		}
-		fmt.Printf("first b=%v, msg=%s\n", b, msg)
 
-		for i := 0; i < 2; i++ {
-			b, msg, err := readReply(reader)
-			fmt.Printf("file#1 b=%v, msg=%s\n", b, msg)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				return err
-			}
-			if b != ok {
-				return errors.New(msg)
-			}
-		}
-
+		mode = os.FileMode(0406)
 		filename = "test2"
 		content = "content2\n"
-		fmt.Fprintf(stdin, "C0604 %d %s\n", len(content), filename)
-		stdin.Write([]byte(content))
-		stdin.Write([]byte{'\x00'})
-
-		for i := 0; i < 2; i++ {
-			b, msg, err := readReply(reader)
-			fmt.Printf("file#2 b=%v, msg=%s\n", b, msg)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				return err
-			}
-			if b != ok {
-				return errors.New(msg)
-			}
+		err = s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
+		if err != nil {
+			return err
 		}
+
 		return nil
 	}()
 	if err != nil {
@@ -101,6 +72,68 @@ const (
 	warning    = '\x01'
 	fatalError = '\x02'
 )
+
+type source struct {
+	remIn          io.WriteCloser
+	remOut         io.Reader
+	remReader      *bufio.Reader
+	seenFirstReply bool
+}
+
+func newSource(remIn io.WriteCloser, remOut io.Reader) *source {
+	return &source{
+		remIn:     remIn,
+		remOut:    remOut,
+		remReader: bufio.NewReader(remOut),
+	}
+}
+
+func (s *source) close() error {
+	return s.remIn.Close()
+}
+
+func (s *source) writeFile(mode os.FileMode, size int64, name string, body io.Reader) error {
+	_, err := fmt.Fprintf(s.remIn, "C%#4o %d %s\n", mode, size, name)
+	if err != nil {
+		return fmt.Errorf("failed to write scp file header: err=%s", err)
+	}
+	_, err = io.Copy(s.remIn, body)
+	if err != nil {
+		return fmt.Errorf("failed to write scp file body: err=%s", err)
+	}
+	_, err = s.remIn.Write([]byte{'\x00'})
+	if err != nil {
+		return fmt.Errorf("failed to write scp message terminator: err=%s", err)
+	}
+
+	if !s.seenFirstReply {
+		b, msg, err := s.readReply()
+		fmt.Printf("firstReply b=%v, msg=%s\n", b, msg)
+		if err != nil {
+			return err
+		}
+		s.seenFirstReply = true
+	}
+
+	for i := 0; i < 2; i++ {
+		b, msg, err := s.readReply()
+		fmt.Printf("filename=%s b=%v, msg=%s\n", name, b, msg)
+		if b != ok {
+			return errors.New(msg)
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *source) readReply() (b byte, msg string, err error) {
+	return readReply(s.remReader)
+}
 
 func readReply(r *bufio.Reader) (b byte, msg string, err error) {
 	b, err = r.ReadByte()
