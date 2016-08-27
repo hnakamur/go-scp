@@ -35,13 +35,16 @@ func run() error {
 	}
 
 	err = func() error {
-		s := newSource(stdin, stdout)
+		s, err := newSource(stdin, stdout)
+		if err != nil {
+			return err
+		}
 		defer s.close()
 
 		mode := os.FileMode(0644)
 		filename := "test1"
 		content := "content1\n"
-		err := s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
+		err = s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
 		if err != nil {
 			return err
 		}
@@ -74,18 +77,25 @@ const (
 )
 
 type source struct {
-	remIn          io.WriteCloser
-	remOut         io.Reader
-	remReader      *bufio.Reader
-	seenFirstReply bool
+	remIn     io.WriteCloser
+	remOut    io.Reader
+	remReader *bufio.Reader
 }
 
-func newSource(remIn io.WriteCloser, remOut io.Reader) *source {
-	return &source{
+func newSource(remIn io.WriteCloser, remOut io.Reader) (*source, error) {
+	s := &source{
 		remIn:     remIn,
 		remOut:    remOut,
 		remReader: bufio.NewReader(remOut),
 	}
+
+	b, msg, err := s.readReply()
+	fmt.Printf("firstReply b=%v, msg=%s\n", b, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 func (s *source) close() error {
@@ -101,33 +111,22 @@ func (s *source) writeFile(mode os.FileMode, size int64, name string, body io.Re
 	if err != nil {
 		return fmt.Errorf("failed to write scp file body: err=%s", err)
 	}
-	_, err = s.remIn.Write([]byte{'\x00'})
+	b, msg, err := s.readReply()
+	fmt.Printf("reply after writing body. filename=%s b=%v, msg=%s\n", name, b, msg)
+	if b != ok {
+		return fmt.Errorf("got error reply after writing scp file body: err=%s", err)
+	}
+
+	_, err = s.remIn.Write([]byte{ok})
 	if err != nil {
-		return fmt.Errorf("failed to write scp message terminator: err=%s", err)
+		return fmt.Errorf("failed to write scp ok reply: err=%s", err)
+	}
+	b, msg, err = s.readReply()
+	fmt.Printf("replay after writing reply. filename=%s b=%v, msg=%s\n", name, b, msg)
+	if b != ok {
+		return fmt.Errorf("got error reply after writing scp file body: err=%s", err)
 	}
 
-	if !s.seenFirstReply {
-		b, msg, err := s.readReply()
-		fmt.Printf("firstReply b=%v, msg=%s\n", b, msg)
-		if err != nil {
-			return err
-		}
-		s.seenFirstReply = true
-	}
-
-	for i := 0; i < 2; i++ {
-		b, msg, err := s.readReply()
-		fmt.Printf("filename=%s b=%v, msg=%s\n", name, b, msg)
-		if b != ok {
-			return errors.New(msg)
-		}
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-	}
 	return nil
 }
 
