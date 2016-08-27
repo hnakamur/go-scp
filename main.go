@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -51,7 +52,7 @@ func run() error {
 		mode := os.FileMode(0644)
 		filename := "test1"
 		content := "content1\n"
-		err = s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
+		err = s.writeFile(mode, int64(len(content)), filename, ioutil.NopCloser(bytes.NewBufferString(content)))
 		if err != nil {
 			return err
 		}
@@ -69,7 +70,7 @@ func run() error {
 		mode = os.FileMode(0604)
 		filename = "test2"
 		content = ""
-		err = s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
+		err = s.writeFile(mode, int64(len(content)), filename, ioutil.NopCloser(bytes.NewBufferString(content)))
 		if err != nil {
 			return err
 		}
@@ -192,12 +193,14 @@ func secondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 	return rounded.Unix(), rounded.Nanosecond() / int(int64(time.Microsecond)/int64(time.Nanosecond))
 }
 
-func (s *source) writeFile(mode os.FileMode, length int64, filename string, body io.Reader) error {
+func (s *source) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
 	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode, length, filename)
 	if err != nil {
 		return fmt.Errorf("failed to write scp file header: err=%s", err)
 	}
 	_, err = io.Copy(s.remIn, body)
+	// NOTE: We close body whether or not copy fails and ignore an error from closing body.
+	body.Close()
 	if err != nil {
 		return fmt.Errorf("failed to write scp file body: err=%s", err)
 	}
