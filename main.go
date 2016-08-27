@@ -38,37 +38,8 @@ func run() error {
 	}
 	defer client.Close()
 
-	session, err := client.NewSession()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	stdin, err := session.StdinPipe()
-	if err != nil {
-		return err
-	}
-
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
 	destDir := "/tmp"
-	cmd := fmt.Sprintf("scp -tpr %s", escapeShellArg(destDir))
-	err = session.Start(cmd)
-	if err != nil {
-		return err
-	}
-
-	err = func() error {
-		defer stdin.Close()
-
-		s, err := newSource(stdin, stdout)
-		if err != nil {
-			return err
-		}
-
+	f := func(session *ssh.Session, s *source) error {
 		err = s.setTime(
 			time.Date(2006, 1, 2, 15, 04, 05, 678901000, time.Local),
 			time.Date(2018, 8, 31, 23, 59, 58, 999999000, time.Local),
@@ -108,22 +79,9 @@ func run() error {
 			return err
 		}
 
-		err = s.endDirectory()
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}()
-	if err != nil {
-		return err
+		return s.endDirectory()
 	}
-
-	err = session.Wait()
-	if err != nil {
-		return err
-	}
-	return nil
+	return copyToRemote(client, destDir, "", true, true, f)
 }
 
 func sshAgent() (ssh.AuthMethod, error) {
@@ -136,6 +94,58 @@ func sshAgent() (ssh.AuthMethod, error) {
 
 func escapeShellArg(arg string) string {
 	return "'" + strings.Replace(arg, "'", `'\''`, -1) + "'"
+}
+
+func copyToRemote(client *ssh.Client, destDir, scpPath string, recursive, updatesPermission bool, f func(session *ssh.Session, src *source) error) error {
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return err
+	}
+
+	err = func() error {
+		defer stdin.Close()
+
+		if scpPath == "" {
+			scpPath = "scp"
+		}
+
+		opt := []byte("-t")
+		if recursive {
+			opt = append(opt, 'r')
+		}
+		if updatesPermission {
+			opt = append(opt, 'p')
+		}
+
+		cmd := scpPath + " " + string(opt) + " " + escapeShellArg(destDir)
+		err = session.Start(cmd)
+		if err != nil {
+			return err
+		}
+
+		s, err := newSource(stdin, stdout)
+		if err != nil {
+			return err
+		}
+
+		return f(session, s)
+	}()
+	if err != nil {
+		return err
+	}
+
+	return session.Wait()
 }
 
 const (
