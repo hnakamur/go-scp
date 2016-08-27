@@ -18,7 +18,7 @@ func main() {
 }
 
 func run() error {
-	cmd := exec.Command("scp", "-tp", "/tmp")
+	cmd := exec.Command("scp", "-tpr", "/tmp")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -58,10 +58,30 @@ func run() error {
 			return err
 		}
 
+		err = s.startDirectory(os.FileMode(0755), "test2")
+		if err != nil {
+			return err
+		}
+
+		err = s.startDirectory(os.FileMode(0750), "sub")
+		if err != nil {
+			return err
+		}
+
 		mode = os.FileMode(0604)
 		filename = "test2"
 		content = ""
 		err = s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
+		if err != nil {
+			return err
+		}
+
+		err = s.endDirectory()
+		if err != nil {
+			return err
+		}
+
+		err = s.endDirectory()
 		if err != nil {
 			return err
 		}
@@ -123,8 +143,8 @@ func secondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 	return rounded.Unix(), rounded.Nanosecond() / int(int64(time.Microsecond)/int64(time.Nanosecond))
 }
 
-func (s *source) writeFile(mode os.FileMode, size int64, name string, body io.Reader) error {
-	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode, size, name)
+func (s *source) writeFile(mode os.FileMode, length int64, filename string, body io.Reader) error {
+	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode, length, filename)
 	if err != nil {
 		return fmt.Errorf("failed to write scp file header: err=%s", err)
 	}
@@ -140,6 +160,24 @@ func (s *source) writeFile(mode os.FileMode, size int64, name string, body io.Re
 	_, err = s.remIn.Write([]byte{replyOK})
 	if err != nil {
 		return fmt.Errorf("failed to write scp replyOK reply: err=%s", err)
+	}
+	return s.readReply()
+}
+
+func (s *source) startDirectory(mode os.FileMode, dirname string) error {
+	// length is not used.
+	length := 0
+	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgStartDirectory, mode, length, dirname)
+	if err != nil {
+		return fmt.Errorf("failed to write scp start directory header: err=%s", err)
+	}
+	return s.readReply()
+}
+
+func (s *source) endDirectory() error {
+	_, err := fmt.Fprintf(s.remIn, "%c\n", msgEndDirectory)
+	if err != nil {
+		return fmt.Errorf("failed to write scp end directory header: err=%s", err)
 	}
 	return s.readReply()
 }
