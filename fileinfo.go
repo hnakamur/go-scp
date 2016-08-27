@@ -20,6 +20,15 @@ type SysFileInfo struct {
 }
 
 func NewFileInfoFromOS(fi os.FileInfo, setTime bool, replaceName string) FileInfo {
+	var name string
+	if replaceName == "" {
+		name = fi.Name()
+	} else {
+		name = replaceName
+	}
+
+	mode := fi.Mode() & os.ModePerm
+
 	var modTime time.Time
 	var accessTime time.Time
 	if setTime {
@@ -32,16 +41,10 @@ func NewFileInfoFromOS(fi os.FileInfo, setTime bool, replaceName string) FileInf
 		}
 	}
 
-	var name string
-	if replaceName == "" {
-		name = fi.Name()
-	} else {
-		name = replaceName
-	}
 	if fi.IsDir() {
-		return NewDirInfo(name, fi.Mode(), modTime, accessTime)
+		return NewDirInfo(name, mode, modTime, accessTime)
 	} else {
-		return NewFileInfo(name, fi.Size(), fi.Mode(), modTime, accessTime)
+		return NewFileInfo(name, fi.Size(), mode, modTime, accessTime)
 	}
 }
 

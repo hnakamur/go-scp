@@ -10,6 +10,9 @@ import (
 )
 
 func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string, updatesPermission, setTime bool) error {
+	localFilename = filepath.Clean(localFilename)
+	remoteFilename = filepath.Clean(remoteFilename)
+
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
 
@@ -31,6 +34,99 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string, 
 		if err != nil {
 			return fmt.Errorf("failed to copy file: err=%s", err)
 		}
+		return nil
+	}
+	return s.CopyToRemote(copier)
+}
+
+func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, updatesPermission, setTime bool, walkFn filepath.WalkFunc) error {
+	srcDir = filepath.Clean(srcDir)
+	destDir = filepath.Clean(destDir)
+
+	s := NewSource(client, destDir, true, "", true, updatesPermission)
+
+	copier := func(s *Source) error {
+		processDirectories := func(prevDir, dir string, info os.FileInfo) error {
+			rel, err := filepath.Rel(prevDir, dir)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("  rel=%s\n", rel)
+			for _, comp := range strings.Split(rel, string([]rune{filepath.Separator})) {
+				if comp == ".." {
+					fmt.Printf("  endDirectory\n")
+					err := s.EndDirectory()
+					if err != nil {
+						return err
+					}
+				} else if comp == "." {
+					continue
+				} else {
+					fmt.Printf("  startDirectory dir=%s, info.Mode()=%#4o\n", filepath.Base(dir), info.Mode())
+					fi := NewFileInfoFromOS(info, setTime, "")
+					err := s.StartDirectory(fi)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+
+		isSrcDir := true
+		var srcDirInfo os.FileInfo
+		prevDir := srcDir
+		myWalkFn := func(path string, info os.FileInfo, err error) error {
+			if isSrcDir {
+				srcDirInfo = info
+				isSrcDir = false
+			}
+
+			isDir := info.IsDir()
+			var dir string
+			if isDir {
+				dir = path
+			} else {
+				dir = filepath.Dir(path)
+			}
+			fmt.Printf("path=%s, isDir=%v\n", path, isDir)
+			defer func() {
+				prevDir = dir
+			}()
+
+			err = processDirectories(prevDir, dir, info)
+			if err != nil {
+				return err
+			}
+
+			err = walkFn(path, info, err)
+			if err != nil {
+				return err
+			}
+
+			if !isDir {
+				fi := NewFileInfoFromOS(info, setTime, "")
+				file, err := os.Open(path)
+				if err != nil {
+					return err
+				}
+				err = s.WriteFile(fi, file)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		err := filepath.Walk(srcDir, myWalkFn)
+		if err != nil {
+			return err
+		}
+
+		err = processDirectories(prevDir, srcDir, srcDirInfo)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	}
 	return s.CopyToRemote(copier)
@@ -94,7 +190,7 @@ func (s *Source) CopyToRemote(copier func(src *Source) error) error {
 			opt = append(opt, 'd')
 		}
 
-		cmd := s.scpPath + " " + string(opt) + " " + escapeShellArg(s.remoteDestPath)
+		cmd := s.scpPath + " " + string(opt) + " " + EscapeShellArg(s.remoteDestPath)
 		err = s.session.Start(cmd)
 		if err != nil {
 			return err
@@ -114,6 +210,6 @@ func (s *Source) CopyToRemote(copier func(src *Source) error) error {
 	return s.session.Wait()
 }
 
-func escapeShellArg(arg string) string {
+func EscapeShellArg(arg string) string {
 	return "'" + strings.Replace(arg, "'", `'\''`, -1) + "'"
 }
