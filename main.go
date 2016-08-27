@@ -231,13 +231,13 @@ func (s *source) endDirectory() error {
 	return s.readReply()
 }
 
-type SCPError struct {
+type SCPProtocolError struct {
 	msg   string
 	fatal bool
 }
 
-func (e *SCPError) Error() string { return e.msg }
-func (e *SCPError) Fatal() bool   { return e.fatal }
+func (e *SCPProtocolError) Error() string { return e.msg }
+func (e *SCPProtocolError) Fatal() bool   { return e.fatal }
 
 func (s *source) readReply() error {
 	b, err := s.remReader.ReadByte()
@@ -255,7 +255,7 @@ func (s *source) readReply() error {
 	if err != nil {
 		return fmt.Errorf("failed to read scp reply message: err=%s", err)
 	}
-	return &SCPError{
+	return &SCPProtocolError{
 		msg:   string(line),
 		fatal: b == replyFatalError,
 	}
