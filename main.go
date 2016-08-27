@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -35,11 +34,12 @@ func run() error {
 	}
 
 	err = func() error {
+		defer stdin.Close()
+
 		s, err := newSource(stdin, stdout)
 		if err != nil {
 			return err
 		}
-		defer s.close()
 
 		mode := os.FileMode(0644)
 		filename := "test1"
@@ -71,9 +71,9 @@ func run() error {
 }
 
 const (
-	ok         = '\x00'
-	warning    = '\x01'
-	fatalError = '\x02'
+	replyOK         = '\x00'
+	replyError      = '\x01'
+	replyFatalError = '\x02'
 )
 
 type source struct {
@@ -89,17 +89,7 @@ func newSource(remIn io.WriteCloser, remOut io.Reader) (*source, error) {
 		remReader: bufio.NewReader(remOut),
 	}
 
-	b, msg, err := s.readReply()
-	fmt.Printf("firstReply b=%v, msg=%s\n", b, msg)
-	if err != nil {
-		return nil, err
-	}
-
-	return s, nil
-}
-
-func (s *source) close() error {
-	return s.remIn.Close()
+	return s, s.readReply()
 }
 
 func (s *source) writeFile(mode os.FileMode, size int64, name string, body io.Reader) error {
@@ -111,46 +101,49 @@ func (s *source) writeFile(mode os.FileMode, size int64, name string, body io.Re
 	if err != nil {
 		return fmt.Errorf("failed to write scp file body: err=%s", err)
 	}
-	b, msg, err := s.readReply()
-	fmt.Printf("reply after writing body. filename=%s b=%v, msg=%s\n", name, b, msg)
-	if b != ok {
-		return fmt.Errorf("got error reply after writing scp file body: err=%s", err)
+	err = s.readReply()
+	if err != nil {
+		return err
 	}
 
-	_, err = s.remIn.Write([]byte{ok})
+	_, err = s.remIn.Write([]byte{replyOK})
 	if err != nil {
-		return fmt.Errorf("failed to write scp ok reply: err=%s", err)
+		return fmt.Errorf("failed to write scp replyOK reply: err=%s", err)
 	}
-	b, msg, err = s.readReply()
-	fmt.Printf("replay after writing reply. filename=%s b=%v, msg=%s\n", name, b, msg)
-	if b != ok {
-		return fmt.Errorf("got error reply after writing scp file body: err=%s", err)
+	err = s.readReply()
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (s *source) readReply() (b byte, msg string, err error) {
-	return readReply(s.remReader)
+type SCPError struct {
+	msg   string
+	fatal bool
 }
 
-func readReply(r *bufio.Reader) (b byte, msg string, err error) {
-	b, err = r.ReadByte()
+func (e *SCPError) Error() string { return e.msg }
+func (e *SCPError) Fatal() bool   { return e.fatal }
+
+func (s *source) readReply() error {
+	b, err := s.remReader.ReadByte()
 	if err != nil {
-		return
+		return fmt.Errorf("failed to read scp reply type: err=%s", err)
 	}
-	if b == ok {
-		return
+	if b == replyOK {
+		return nil
 	}
-	if b != warning && b != fatalError {
-		err = errors.New("unexpected reply type")
-		return
+	if b != replyError && b != replyFatalError {
+		return fmt.Errorf("unexpected scp reply type: %v", b)
 	}
 	var line []byte
-	line, err = r.ReadBytes('\n')
+	line, err = s.remReader.ReadBytes('\n')
 	if err != nil {
-		return
+		return fmt.Errorf("failed to read scp reply message: err=%s", err)
 	}
-	msg = string(line)
-	return
+	return &SCPError{
+		msg:   string(line),
+		fatal: b == replyFatalError,
+	}
 }
