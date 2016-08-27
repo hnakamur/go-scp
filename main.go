@@ -51,7 +51,7 @@ func run() error {
 
 		mode = os.FileMode(0406)
 		filename = "test2"
-		content = "content2\n"
+		content = ""
 		err = s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
 		if err != nil {
 			return err
