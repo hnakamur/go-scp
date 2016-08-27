@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -77,7 +78,7 @@ func secondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 }
 
 func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
-	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode, length, filename)
+	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode, length, filepath.Base(filename))
 	if err != nil {
 		return fmt.Errorf("failed to write scp file header: err=%s", err)
 	}
@@ -102,7 +103,7 @@ func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename stri
 func (s *sourceProtocol) startDirectory(mode os.FileMode, dirname string) error {
 	// length is not used.
 	length := 0
-	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgStartDirectory, mode, length, dirname)
+	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgStartDirectory, mode, length, filepath.Base(dirname))
 	if err != nil {
 		return fmt.Errorf("failed to write scp start directory header: err=%s", err)
 	}

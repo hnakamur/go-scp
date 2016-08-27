@@ -2,6 +2,7 @@ package scp
 
 import (
 	"os"
+	"syscall"
 	"time"
 )
 
@@ -16,6 +17,32 @@ type FileInfo struct {
 
 type SysFileInfo struct {
 	AccessTime time.Time
+}
+
+func NewFileInfoFromOS(fi os.FileInfo, setTime bool, replaceName string) FileInfo {
+	var modTime time.Time
+	var accessTime time.Time
+	if setTime {
+		modTime = fi.ModTime()
+
+		sysStat, ok := fi.Sys().(*syscall.Stat_t)
+		if ok {
+			sec, nsec := sysStat.Atim.Unix()
+			accessTime = time.Unix(sec, nsec)
+		}
+	}
+
+	var name string
+	if replaceName == "" {
+		name = fi.Name()
+	} else {
+		name = replaceName
+	}
+	if fi.IsDir() {
+		return NewDirInfo(name, fi.Mode(), modTime, accessTime)
+	} else {
+		return NewFileInfo(name, fi.Size(), fi.Mode(), modTime, accessTime)
+	}
 }
 
 func NewFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) FileInfo {

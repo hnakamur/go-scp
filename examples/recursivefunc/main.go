@@ -78,7 +78,7 @@ func run() error {
 
 		return s.EndDirectory()
 	}
-	return scp.NewSource(client, destDir, "", true, true).CopyToRemote(copier)
+	return scp.NewSource(client, destDir, true, "", true, true).CopyToRemote(copier)
 }
 
 func sshAgent() (ssh.AuthMethod, error) {
