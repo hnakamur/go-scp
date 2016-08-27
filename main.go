@@ -41,28 +41,25 @@ func run() error {
 
 	destDir := "/tmp"
 	f := func(session *ssh.Session, s *source) error {
-		err = s.setTime(
-			time.Date(2006, 1, 2, 15, 04, 05, 678901000, time.Local),
-			time.Date(2018, 8, 31, 23, 59, 58, 999999000, time.Local),
-		)
-		if err != nil {
-			return err
-		}
-
 		mode := os.FileMode(0644)
 		filename := "test1"
 		content := "content1\n"
-		err = s.writeFile(mode, int64(len(content)), filename, ioutil.NopCloser(bytes.NewBufferString(content)))
+		modTime := time.Date(2006, 1, 2, 15, 04, 05, 678901000, time.Local)
+		accessTime := time.Date(2018, 8, 31, 23, 59, 58, 999999000, time.Local)
+		fi := NewFileInfo(filename, int64(len(content)), mode, modTime, accessTime)
+		err = s.WriteFile(fi, ioutil.NopCloser(bytes.NewBufferString(content)))
 		if err != nil {
 			return err
 		}
 
-		err = s.startDirectory(os.FileMode(0755), "test2")
+		di := NewDirInfo("test2", os.FileMode(0755), time.Time{}, time.Time{})
+		err = s.StartDirectory(di)
 		if err != nil {
 			return err
 		}
 
-		err = s.startDirectory(os.FileMode(0750), "sub")
+		di = NewDirInfo("sub", os.FileMode(0750), time.Time{}, time.Time{})
+		err = s.StartDirectory(di)
 		if err != nil {
 			return err
 		}
@@ -70,17 +67,18 @@ func run() error {
 		mode = os.FileMode(0604)
 		filename = "test2"
 		content = ""
-		err = s.writeFile(mode, int64(len(content)), filename, ioutil.NopCloser(bytes.NewBufferString(content)))
+		fi = NewFileInfo(filename, int64(len(content)), mode, time.Time{}, time.Time{})
+		err = s.WriteFile(fi, ioutil.NopCloser(bytes.NewBufferString(content)))
 		if err != nil {
 			return err
 		}
 
-		err = s.endDirectory()
+		err = s.EndDirectory()
 		if err != nil {
 			return err
 		}
 
-		return s.endDirectory()
+		return s.EndDirectory()
 	}
 	return copyToRemote(client, destDir, "", true, true, f)
 }
@@ -176,6 +174,70 @@ func newSource(remIn io.WriteCloser, remOut io.Reader) (*source, error) {
 	}
 
 	return s, s.readReply()
+}
+
+type FileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+	sys     SysFileInfo
+}
+
+type SysFileInfo struct {
+	AccessTime time.Time
+}
+
+func NewFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
+	return FileInfo{
+		name:    name,
+		size:    size,
+		mode:    mode,
+		modTime: modTime,
+		sys:     SysFileInfo{AccessTime: accessTime},
+	}
+}
+
+func NewDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
+	return FileInfo{
+		name:    name,
+		mode:    mode,
+		modTime: modTime,
+		isDir:   true,
+		sys:     SysFileInfo{AccessTime: accessTime},
+	}
+}
+
+func (i *FileInfo) Name() string       { return i.name }
+func (i *FileInfo) Size() int64        { return i.size }
+func (i *FileInfo) Mode() os.FileMode  { return i.mode }
+func (i *FileInfo) ModTime() time.Time { return i.modTime }
+func (i *FileInfo) IsDir() bool        { return i.isDir }
+func (i *FileInfo) Sys() interface{}   { return i.sys }
+
+func (s *source) WriteFile(fileInfo FileInfo, body io.ReadCloser) error {
+	if !fileInfo.modTime.IsZero() || !fileInfo.sys.AccessTime.IsZero() {
+		err := s.setTime(fileInfo.modTime, fileInfo.sys.AccessTime)
+		if err != nil {
+			return err
+		}
+	}
+	return s.writeFile(fileInfo.mode, fileInfo.size, fileInfo.name, body)
+}
+
+func (s *source) StartDirectory(dirInfo FileInfo) error {
+	if !dirInfo.modTime.IsZero() || !dirInfo.sys.AccessTime.IsZero() {
+		err := s.setTime(dirInfo.modTime, dirInfo.sys.AccessTime)
+		if err != nil {
+			return err
+		}
+	}
+	return s.startDirectory(dirInfo.mode, dirInfo.name)
+}
+
+func (s *source) EndDirectory() error {
+	return s.endDirectory()
 }
 
 func (s *source) setTime(mtime, atime time.Time) error {
