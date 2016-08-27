@@ -40,7 +40,7 @@ func run() error {
 	defer client.Close()
 
 	destDir := "/tmp"
-	f := func(session *ssh.Session, s *sourceProtocol) error {
+	copier := func(s *Source) error {
 		mode := os.FileMode(0644)
 		filename := "test1"
 		content := "content1\n"
@@ -80,7 +80,7 @@ func run() error {
 
 		return s.EndDirectory()
 	}
-	return copyToRemote(client, destDir, "", true, true, f)
+	return NewSource(client, destDir, "", true, true).CopyToRemote(copier)
 }
 
 func sshAgent() (ssh.AuthMethod, error) {
@@ -95,19 +95,40 @@ func escapeShellArg(arg string) string {
 	return "'" + strings.Replace(arg, "'", `'\''`, -1) + "'"
 }
 
-func copyToRemote(client *ssh.Client, destDir, scpPath string, recursive, updatesPermission bool, f func(session *ssh.Session, src *sourceProtocol) error) error {
-	session, err := client.NewSession()
+type Source struct {
+	client            *ssh.Client
+	session           *ssh.Session
+	remoteDestDir     string
+	scpPath           string
+	recursive         bool
+	updatesPermission bool
+	*sourceProtocol
+}
+
+func NewSource(client *ssh.Client, remoteDestDir, scpPath string, recursive, updatesPermission bool) *Source {
+	return &Source{
+		client:            client,
+		remoteDestDir:     remoteDestDir,
+		scpPath:           scpPath,
+		recursive:         recursive,
+		updatesPermission: updatesPermission,
+	}
+}
+
+func (s *Source) CopyToRemote(copier func(src *Source) error) error {
+	var err error
+	s.session, err = s.client.NewSession()
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+	defer s.session.Close()
 
-	stdout, err := session.StdoutPipe()
+	stdout, err := s.session.StdoutPipe()
 	if err != nil {
 		return err
 	}
 
-	stdin, err := session.StdinPipe()
+	stdin, err := s.session.StdinPipe()
 	if err != nil {
 		return err
 	}
@@ -115,36 +136,36 @@ func copyToRemote(client *ssh.Client, destDir, scpPath string, recursive, update
 	err = func() error {
 		defer stdin.Close()
 
-		if scpPath == "" {
-			scpPath = "scp"
+		if s.scpPath == "" {
+			s.scpPath = "scp"
 		}
 
 		opt := []byte("-t")
-		if recursive {
+		if s.recursive {
 			opt = append(opt, 'r')
 		}
-		if updatesPermission {
+		if s.updatesPermission {
 			opt = append(opt, 'p')
 		}
 
-		cmd := scpPath + " " + string(opt) + " " + escapeShellArg(destDir)
-		err = session.Start(cmd)
+		cmd := s.scpPath + " " + string(opt) + " " + escapeShellArg(s.remoteDestDir)
+		err = s.session.Start(cmd)
 		if err != nil {
 			return err
 		}
 
-		s, err := newSource(stdin, stdout)
+		s.sourceProtocol, err = newSourceProtocol(stdin, stdout)
 		if err != nil {
 			return err
 		}
 
-		return f(session, s)
+		return copier(s)
 	}()
 	if err != nil {
 		return err
 	}
 
-	return session.Wait()
+	return s.session.Wait()
 }
 
 type FileInfo struct {
@@ -206,7 +227,7 @@ type sourceProtocol struct {
 	remReader *bufio.Reader
 }
 
-func newSource(remIn io.WriteCloser, remOut io.Reader) (*sourceProtocol, error) {
+func newSourceProtocol(remIn io.WriteCloser, remOut io.Reader) (*sourceProtocol, error) {
 	s := &sourceProtocol{
 		remIn:     remIn,
 		remOut:    remOut,
