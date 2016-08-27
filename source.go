@@ -46,31 +46,27 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, updates
 	s := NewSource(client, destDir, true, "", true, updatesPermission)
 
 	copier := func(s *Source) error {
-		processDirectories := func(prevDir, dir string, info os.FileInfo) error {
+		endDirectories := func(prevDir, dir string) ([]string, error) {
 			rel, err := filepath.Rel(prevDir, dir)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			fmt.Printf("  rel=%s\n", rel)
+			var dirs []string
 			for _, comp := range strings.Split(rel, string([]rune{filepath.Separator})) {
 				if comp == ".." {
 					fmt.Printf("  endDirectory\n")
 					err := s.EndDirectory()
 					if err != nil {
-						return err
+						return nil, err
 					}
 				} else if comp == "." {
 					continue
 				} else {
-					fmt.Printf("  startDirectory dir=%s, info.Mode()=%#4o\n", filepath.Base(dir), info.Mode())
-					fi := NewFileInfoFromOS(info, setTime, "")
-					err := s.StartDirectory(fi)
-					if err != nil {
-						return err
-					}
+					dirs = append(dirs, comp)
 				}
 			}
-			return nil
+			return dirs, nil
 		}
 
 		isSrcDir := true
@@ -90,11 +86,8 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, updates
 				dir = filepath.Dir(path)
 			}
 			fmt.Printf("path=%s, isDir=%v\n", path, isDir)
-			defer func() {
-				prevDir = dir
-			}()
 
-			err = processDirectories(prevDir, dir, info)
+			newDirs, err := endDirectories(prevDir, dir)
 			if err != nil {
 				return err
 			}
@@ -104,7 +97,21 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, updates
 				return err
 			}
 
+			defer func() {
+				prevDir = dir
+			}()
+
+			for _, newDir := range newDirs {
+				fmt.Printf("  startDirectory dir=%s\n", newDir)
+				fi := NewFileInfoFromOS(info, setTime, newDir)
+				err := s.StartDirectory(fi)
+				if err != nil {
+					return err
+				}
+			}
+
 			if !isDir {
+				fmt.Printf("  writeFile path=%s\n", filepath.Base(path))
 				fi := NewFileInfoFromOS(info, setTime, "")
 				file, err := os.Open(path)
 				if err != nil {
@@ -122,7 +129,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, updates
 			return err
 		}
 
-		err = processDirectories(prevDir, srcDir, srcDirInfo)
+		_, err = endDirectories(prevDir, srcDir)
 		if err != nil {
 			return err
 		}
