@@ -5,9 +5,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os"
-	"os/exec"
+	"strings"
 	"time"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 func main() {
@@ -18,18 +22,41 @@ func main() {
 }
 
 func run() error {
-	cmd := exec.Command("scp", "-tpr", "/tmp")
-	stdin, err := cmd.StdinPipe()
+	auth, err := sshAgent()
 	if err != nil {
 		return err
 	}
 
-	stdout, err := cmd.StdoutPipe()
+	config := &ssh.ClientConfig{
+		User: "root",
+		Auth: []ssh.AuthMethod{auth},
+	}
+
+	client, err := ssh.Dial("tcp", "10.155.92.21:22", config)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	stdin, err := session.StdinPipe()
 	if err != nil {
 		return err
 	}
 
-	err = cmd.Start()
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	destDir := "/tmp"
+	cmd := fmt.Sprintf("scp -tpr %s", escapeShellArg(destDir))
+	err = session.Start(cmd)
 	if err != nil {
 		return err
 	}
@@ -92,11 +119,23 @@ func run() error {
 		return err
 	}
 
-	err = cmd.Wait()
+	err = session.Wait()
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func sshAgent() (ssh.AuthMethod, error) {
+	agentSock, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
+	if err != nil {
+		return nil, err
+	}
+	return ssh.PublicKeysCallback(agent.NewClient(agentSock).Signers), nil
+}
+
+func escapeShellArg(arg string) string {
+	return "'" + strings.Replace(arg, "'", `'\''`, -1) + "'"
 }
 
 const (
