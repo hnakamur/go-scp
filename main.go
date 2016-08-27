@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"time"
 )
 
 func main() {
@@ -17,7 +18,7 @@ func main() {
 }
 
 func run() error {
-	cmd := exec.Command("scp", "-t", "/tmp")
+	cmd := exec.Command("scp", "-tp", "/tmp")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -41,6 +42,14 @@ func run() error {
 			return err
 		}
 
+		err = s.setTime(
+			time.Date(2006, 1, 2, 15, 04, 05, 678901000, time.Local),
+			time.Date(2018, 8, 31, 23, 59, 58, 999999000, time.Local),
+		)
+		if err != nil {
+			return err
+		}
+
 		mode := os.FileMode(0644)
 		filename := "test1"
 		content := "content1\n"
@@ -49,7 +58,7 @@ func run() error {
 			return err
 		}
 
-		mode = os.FileMode(0406)
+		mode = os.FileMode(0604)
 		filename = "test2"
 		content = ""
 		err = s.writeFile(mode, int64(len(content)), filename, bytes.NewBufferString(content))
@@ -69,6 +78,13 @@ func run() error {
 	}
 	return nil
 }
+
+const (
+	msgCopyFile       = 'C'
+	msgStartDirectory = 'D'
+	msgEndDirectory   = 'E'
+	msgTime           = 'T'
+)
 
 const (
 	replyOK         = '\x00'
@@ -92,8 +108,23 @@ func newSource(remIn io.WriteCloser, remOut io.Reader) (*source, error) {
 	return s, s.readReply()
 }
 
+func (s *source) setTime(mtime, atime time.Time) error {
+	ms, mus := secondsAndMicroseconds(mtime)
+	as, aus := secondsAndMicroseconds(atime)
+	_, err := fmt.Fprintf(s.remIn, "%c%d %d %d %d\n", msgTime, ms, mus, as, aus)
+	if err != nil {
+		return fmt.Errorf("failed to write scp time header: err=%s", err)
+	}
+	return s.readReply()
+}
+
+func secondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
+	rounded := t.Round(time.Microsecond)
+	return rounded.Unix(), rounded.Nanosecond() / int(int64(time.Microsecond)/int64(time.Nanosecond))
+}
+
 func (s *source) writeFile(mode os.FileMode, size int64, name string, body io.Reader) error {
-	_, err := fmt.Fprintf(s.remIn, "C%#4o %d %s\n", mode, size, name)
+	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode, size, name)
 	if err != nil {
 		return fmt.Errorf("failed to write scp file header: err=%s", err)
 	}
@@ -110,12 +141,7 @@ func (s *source) writeFile(mode os.FileMode, size int64, name string, body io.Re
 	if err != nil {
 		return fmt.Errorf("failed to write scp replyOK reply: err=%s", err)
 	}
-	err = s.readReply()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.readReply()
 }
 
 type SCPError struct {
