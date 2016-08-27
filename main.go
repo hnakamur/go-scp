@@ -40,7 +40,7 @@ func run() error {
 	defer client.Close()
 
 	destDir := "/tmp"
-	f := func(session *ssh.Session, s *source) error {
+	f := func(session *ssh.Session, s *sourceProtocol) error {
 		mode := os.FileMode(0644)
 		filename := "test1"
 		content := "content1\n"
@@ -95,7 +95,7 @@ func escapeShellArg(arg string) string {
 	return "'" + strings.Replace(arg, "'", `'\''`, -1) + "'"
 }
 
-func copyToRemote(client *ssh.Client, destDir, scpPath string, recursive, updatesPermission bool, f func(session *ssh.Session, src *source) error) error {
+func copyToRemote(client *ssh.Client, destDir, scpPath string, recursive, updatesPermission bool, f func(session *ssh.Session, src *sourceProtocol) error) error {
 	session, err := client.NewSession()
 	if err != nil {
 		return err
@@ -147,35 +147,6 @@ func copyToRemote(client *ssh.Client, destDir, scpPath string, recursive, update
 	return session.Wait()
 }
 
-const (
-	msgCopyFile       = 'C'
-	msgStartDirectory = 'D'
-	msgEndDirectory   = 'E'
-	msgTime           = 'T'
-)
-
-const (
-	replyOK         = '\x00'
-	replyError      = '\x01'
-	replyFatalError = '\x02'
-)
-
-type source struct {
-	remIn     io.WriteCloser
-	remOut    io.Reader
-	remReader *bufio.Reader
-}
-
-func newSource(remIn io.WriteCloser, remOut io.Reader) (*source, error) {
-	s := &source{
-		remIn:     remIn,
-		remOut:    remOut,
-		remReader: bufio.NewReader(remOut),
-	}
-
-	return s, s.readReply()
-}
-
 type FileInfo struct {
 	name    string
 	size    int64
@@ -216,7 +187,36 @@ func (i *FileInfo) ModTime() time.Time { return i.modTime }
 func (i *FileInfo) IsDir() bool        { return i.isDir }
 func (i *FileInfo) Sys() interface{}   { return i.sys }
 
-func (s *source) WriteFile(fileInfo FileInfo, body io.ReadCloser) error {
+const (
+	msgCopyFile       = 'C'
+	msgStartDirectory = 'D'
+	msgEndDirectory   = 'E'
+	msgTime           = 'T'
+)
+
+const (
+	replyOK         = '\x00'
+	replyError      = '\x01'
+	replyFatalError = '\x02'
+)
+
+type sourceProtocol struct {
+	remIn     io.WriteCloser
+	remOut    io.Reader
+	remReader *bufio.Reader
+}
+
+func newSource(remIn io.WriteCloser, remOut io.Reader) (*sourceProtocol, error) {
+	s := &sourceProtocol{
+		remIn:     remIn,
+		remOut:    remOut,
+		remReader: bufio.NewReader(remOut),
+	}
+
+	return s, s.readReply()
+}
+
+func (s *sourceProtocol) WriteFile(fileInfo FileInfo, body io.ReadCloser) error {
 	if !fileInfo.modTime.IsZero() || !fileInfo.sys.AccessTime.IsZero() {
 		err := s.setTime(fileInfo.modTime, fileInfo.sys.AccessTime)
 		if err != nil {
@@ -226,7 +226,7 @@ func (s *source) WriteFile(fileInfo FileInfo, body io.ReadCloser) error {
 	return s.writeFile(fileInfo.mode, fileInfo.size, fileInfo.name, body)
 }
 
-func (s *source) StartDirectory(dirInfo FileInfo) error {
+func (s *sourceProtocol) StartDirectory(dirInfo FileInfo) error {
 	if !dirInfo.modTime.IsZero() || !dirInfo.sys.AccessTime.IsZero() {
 		err := s.setTime(dirInfo.modTime, dirInfo.sys.AccessTime)
 		if err != nil {
@@ -236,11 +236,11 @@ func (s *source) StartDirectory(dirInfo FileInfo) error {
 	return s.startDirectory(dirInfo.mode, dirInfo.name)
 }
 
-func (s *source) EndDirectory() error {
+func (s *sourceProtocol) EndDirectory() error {
 	return s.endDirectory()
 }
 
-func (s *source) setTime(mtime, atime time.Time) error {
+func (s *sourceProtocol) setTime(mtime, atime time.Time) error {
 	ms, mus := secondsAndMicroseconds(mtime)
 	as, aus := secondsAndMicroseconds(atime)
 	_, err := fmt.Fprintf(s.remIn, "%c%d %d %d %d\n", msgTime, ms, mus, as, aus)
@@ -255,7 +255,7 @@ func secondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 	return rounded.Unix(), rounded.Nanosecond() / int(int64(time.Microsecond)/int64(time.Nanosecond))
 }
 
-func (s *source) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
+func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
 	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode, length, filename)
 	if err != nil {
 		return fmt.Errorf("failed to write scp file header: err=%s", err)
@@ -278,7 +278,7 @@ func (s *source) writeFile(mode os.FileMode, length int64, filename string, body
 	return s.readReply()
 }
 
-func (s *source) startDirectory(mode os.FileMode, dirname string) error {
+func (s *sourceProtocol) startDirectory(mode os.FileMode, dirname string) error {
 	// length is not used.
 	length := 0
 	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgStartDirectory, mode, length, dirname)
@@ -288,7 +288,7 @@ func (s *source) startDirectory(mode os.FileMode, dirname string) error {
 	return s.readReply()
 }
 
-func (s *source) endDirectory() error {
+func (s *sourceProtocol) endDirectory() error {
 	_, err := fmt.Fprintf(s.remIn, "%c\n", msgEndDirectory)
 	if err != nil {
 		return fmt.Errorf("failed to write scp end directory header: err=%s", err)
@@ -296,15 +296,7 @@ func (s *source) endDirectory() error {
 	return s.readReply()
 }
 
-type SCPProtocolError struct {
-	msg   string
-	fatal bool
-}
-
-func (e *SCPProtocolError) Error() string { return e.msg }
-func (e *SCPProtocolError) Fatal() bool   { return e.fatal }
-
-func (s *source) readReply() error {
+func (s *sourceProtocol) readReply() error {
 	b, err := s.remReader.ReadByte()
 	if err != nil {
 		return fmt.Errorf("failed to read scp reply type: err=%s", err)
@@ -325,3 +317,11 @@ func (s *source) readReply() error {
 		fatal: b == replyFatalError,
 	}
 }
+
+type SCPProtocolError struct {
+	msg   string
+	fatal bool
+}
+
+func (e *SCPProtocolError) Error() string { return e.msg }
+func (e *SCPProtocolError) Fatal() bool   { return e.fatal }
