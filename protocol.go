@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -186,7 +185,6 @@ func fromSecondsAndMicroseconds(seconds int64, microseconds int) time.Time {
 
 func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 	b, err := s.remReader.ReadByte()
-	log.Printf("ReadHeaderOrReply. b=%x, err=%+v\n", b, err)
 	if err == io.EOF {
 		return nil, err
 	} else if err != nil {
@@ -202,7 +200,6 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 		if n != 3 {
 			return nil, fmt.Errorf("unexpected count in reading file message header: n=%d", 3)
 		}
-		log.Printf("ReadHeaderOrReply. filieHeader=%+v\n", h)
 
 		err = s.WriteReplyOK()
 		if err != nil {
@@ -220,7 +217,6 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 		if n != 3 {
 			return nil, fmt.Errorf("unexpected count in reading start directory message header: n=%d", 3)
 		}
-		log.Printf("ReadHeaderOrReply. startDirectoryHeader=%+v\n", h)
 
 		err = s.WriteReplyOK()
 		if err != nil {
@@ -262,7 +258,6 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 			Mtime: fromSecondsAndMicroseconds(ms, mus),
 			Atime: fromSecondsAndMicroseconds(as, aus),
 		}
-		log.Printf("ReadHeaderOrReply. timeHeader=%+v\n", h)
 
 		return h, nil
 	case replyOK:
@@ -299,13 +294,11 @@ func (s *sinkProtocol) CopyFileBodyTo(h FileMsgHeader, w io.Writer) error {
 	} else if err != nil {
 		return fmt.Errorf("failed to write copy file body: err=%s", err)
 	}
-	log.Printf("CopyFileBodyTo sending OK\n")
 
 	err = s.WriteReplyOK()
 	if err != nil {
 		return fmt.Errorf("failed to write scp replyOK reply: err=%s", err)
 	}
-	log.Printf("CopyFileBodyTo sent OK successfully\n")
 
 	return nil
 }

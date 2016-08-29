@@ -3,7 +3,6 @@ package scp
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -59,7 +58,6 @@ func copyFileBodyFromRemote(s *Sink, localFilename string, timeHeader TimeMsgHea
 
 	if updatesPermission {
 		err := os.Chmod(localFilename, fileHeader.Mode)
-		log.Printf("copyFileBodyFromRemote. Chmod localFilename=%s, mode=%+v, err=%+v\n", localFilename, fileHeader.Mode, err)
 		if err != nil {
 			return fmt.Errorf("failed to change file mode: err=%s", err)
 		}
@@ -67,7 +65,6 @@ func copyFileBodyFromRemote(s *Sink, localFilename string, timeHeader TimeMsgHea
 
 	if setTime {
 		err := os.Chtimes(localFilename, timeHeader.Atime, timeHeader.Mtime)
-		log.Printf("copyFileBodyFromRemote. Chtimes localFilename=%s, atime=%+v, mtime=%+v, err=%+v\n", localFilename, timeHeader.Atime, timeHeader.Mtime, err)
 		if err != nil {
 			return fmt.Errorf("failed to change file time: err=%s", err)
 		}
@@ -137,7 +134,6 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updat
 					return err
 				}
 			case OKMsg:
-				log.Printf("CopyRecursivelyFromRemote got reply OK\n")
 				// do nothing
 			}
 		}
