@@ -266,10 +266,6 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 
 		return h, nil
 	case replyOK:
-		err = s.WriteReplyOK()
-		if err != nil {
-			return nil, fmt.Errorf("failed to write scp replyOK reply: err=%s", err)
-		}
 		return OKMsg{}, nil
 	case replyError, replyFatalError:
 		line, err := s.remReader.ReadString('\n')

@@ -49,15 +49,17 @@ func copyFileBodyFromRemote(s *Sink, localFilename string, timeHeader TimeMsgHea
 	if err != nil {
 		return fmt.Errorf("failed to open destination file: err=%s", err)
 	}
-	defer file.Close()
 
 	err = s.CopyFileBodyTo(fileHeader, file)
 	if err != nil {
+		file.Close()
 		return fmt.Errorf("failed to copy file: err=%s", err)
 	}
+	file.Close()
 
 	if updatesPermission {
 		err := os.Chmod(localFilename, fileHeader.Mode)
+		log.Printf("copyFileBodyFromRemote. Chmod localFilename=%s, mode=%+v, err=%+v\n", localFilename, fileHeader.Mode, err)
 		if err != nil {
 			return fmt.Errorf("failed to change file mode: err=%s", err)
 		}
@@ -65,6 +67,7 @@ func copyFileBodyFromRemote(s *Sink, localFilename string, timeHeader TimeMsgHea
 
 	if setTime {
 		err := os.Chtimes(localFilename, timeHeader.Atime, timeHeader.Mtime)
+		log.Printf("copyFileBodyFromRemote. Chtimes localFilename=%s, atime=%+v, mtime=%+v, err=%+v\n", localFilename, timeHeader.Atime, timeHeader.Mtime, err)
 		if err != nil {
 			return fmt.Errorf("failed to change file time: err=%s", err)
 		}
@@ -82,6 +85,8 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updat
 	copier := func(s *Sink) error {
 		curDir := destDir
 		var timeHeader TimeMsgHeader
+		var timeHeaders []TimeMsgHeader
+		isFirstStartDirectory := true
 		for {
 			h, err := s.ReadHeaderOrReply()
 			if err == io.EOF {
@@ -93,6 +98,10 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updat
 			case TimeMsgHeader:
 				timeHeader = h.(TimeMsgHeader)
 			case StartDirectoryMsgHeader:
+				if isFirstStartDirectory {
+					isFirstStartDirectory = false
+					continue
+				}
 				dirHeader := h.(StartDirectoryMsgHeader)
 				curDir = filepath.Join(curDir, dirHeader.Name)
 				err := os.MkdirAll(curDir, dirHeader.Mode)
@@ -108,12 +117,17 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updat
 				}
 
 				if setTime {
+					timeHeaders = append(timeHeaders, timeHeader)
+				}
+			case EndDirectoryMsgHeader:
+				if setTime && len(timeHeaders) > 0 {
+					timeHeader = timeHeaders[len(timeHeaders)-1]
+					timeHeaders = timeHeaders[:len(timeHeaders)-1]
 					err := os.Chtimes(curDir, timeHeader.Atime, timeHeader.Mtime)
 					if err != nil {
 						return fmt.Errorf("failed to change directory time: err=%s", err)
 					}
 				}
-			case EndDirectoryMsgHeader:
 				curDir = filepath.Dir(curDir)
 			case FileMsgHeader:
 				fileHeader := h.(FileMsgHeader)
