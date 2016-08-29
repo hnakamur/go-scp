@@ -211,7 +211,3 @@ func (s *Source) CopyToRemote(copier func(src *Source) error) error {
 
 	return s.session.Wait()
 }
-
-func EscapeShellArg(arg string) string {
-	return "'" + strings.Replace(arg, "'", `'\''`, -1) + "'"
-}
