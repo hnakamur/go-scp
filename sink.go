@@ -2,6 +2,8 @@ package scp
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -37,44 +39,94 @@ func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string
 			return fmt.Errorf("expected file message header, got %+v", h)
 		}
 
-		file, err := os.OpenFile(localFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileHeader.Mode)
-		if err != nil {
-			return fmt.Errorf("failed to open destination file: err=%s", err)
-		}
-		defer file.Close()
-
-		err = s.CopyFileBodyTo(fileHeader, file)
-		if err != nil {
-			return fmt.Errorf("failed to copy file: err=%s", err)
-		}
-
-		if updatesPermission {
-			err := os.Chmod(localFilename, fileHeader.Mode)
-			if err != nil {
-				return fmt.Errorf("failed to change file mode: err=%s", err)
-			}
-		}
-
-		if setTime {
-			err := os.Chtimes(localFilename, timeHeader.Atime, timeHeader.Mtime)
-			if err != nil {
-				return fmt.Errorf("failed to change file time: err=%s", err)
-			}
-		}
-
-		return nil
+		return copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, updatesPermission, setTime)
 	}
 	return s.CopyFromRemote(copier)
 }
 
-func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updatesPermission, setTime bool, walkFn filepath.WalkFunc) error {
+func copyFileBodyFromRemote(s *Sink, localFilename string, timeHeader TimeMsgHeader, fileHeader FileMsgHeader, updatesPermission, setTime bool) error {
+	file, err := os.OpenFile(localFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileHeader.Mode)
+	if err != nil {
+		return fmt.Errorf("failed to open destination file: err=%s", err)
+	}
+	defer file.Close()
+
+	err = s.CopyFileBodyTo(fileHeader, file)
+	if err != nil {
+		return fmt.Errorf("failed to copy file: err=%s", err)
+	}
+
+	if updatesPermission {
+		err := os.Chmod(localFilename, fileHeader.Mode)
+		if err != nil {
+			return fmt.Errorf("failed to change file mode: err=%s", err)
+		}
+	}
+
+	if setTime {
+		err := os.Chtimes(localFilename, timeHeader.Atime, timeHeader.Mtime)
+		if err != nil {
+			return fmt.Errorf("failed to change file time: err=%s", err)
+		}
+	}
+
+	return nil
+}
+
+func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updatesPermission, setTime bool) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
 
-	s := NewSink(client, destDir, true, "", true, updatesPermission)
+	s := NewSink(client, srcDir, true, "", true, updatesPermission)
 
 	copier := func(s *Sink) error {
+		curDir := destDir
+		var timeHeader TimeMsgHeader
+		for {
+			h, err := s.ReadHeaderOrReply()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("failed to read scp message header: err=%s", err)
+			}
+			switch h.(type) {
+			case TimeMsgHeader:
+				timeHeader = h.(TimeMsgHeader)
+			case StartDirectoryMsgHeader:
+				dirHeader := h.(StartDirectoryMsgHeader)
+				curDir = filepath.Join(curDir, dirHeader.Name)
+				err := os.MkdirAll(curDir, dirHeader.Mode)
+				if err != nil {
+					return fmt.Errorf("failed to create directory: err=%s", err)
+				}
 
+				if updatesPermission {
+					err := os.Chmod(curDir, dirHeader.Mode)
+					if err != nil {
+						return fmt.Errorf("failed to change directory mode: err=%s", err)
+					}
+				}
+
+				if setTime {
+					err := os.Chtimes(curDir, timeHeader.Atime, timeHeader.Mtime)
+					if err != nil {
+						return fmt.Errorf("failed to change directory time: err=%s", err)
+					}
+				}
+			case EndDirectoryMsgHeader:
+				curDir = filepath.Dir(curDir)
+			case FileMsgHeader:
+				fileHeader := h.(FileMsgHeader)
+				localFilename := filepath.Join(curDir, fileHeader.Name)
+				err := copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, updatesPermission, setTime)
+				if err != nil {
+					return err
+				}
+			case OKMsg:
+				log.Printf("CopyRecursivelyFromRemote got reply OK\n")
+				// do nothing
+			}
+		}
 		return nil
 	}
 	return s.CopyFromRemote(copier)
