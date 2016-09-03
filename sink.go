@@ -9,6 +9,41 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.Writer) (*FileInfo, error) {
+	s, err := NewSinkSession(client, remoteFilename, false, "", false, true)
+	defer s.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	var timeHeader TimeMsgHeader
+	h, err := s.ReadHeaderOrReply()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read scp message header: err=%s", err)
+	}
+	var ok bool
+	timeHeader, ok = h.(TimeMsgHeader)
+	if !ok {
+		return nil, fmt.Errorf("expected time message header, got %+v", h)
+	}
+
+	h, err = s.ReadHeaderOrReply()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read scp message header: err=%s", err)
+	}
+	fileHeader, ok := h.(FileMsgHeader)
+	if !ok {
+		return nil, fmt.Errorf("expected file message header, got %+v", h)
+	}
+	err = s.CopyFileBodyTo(fileHeader, dest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy file: err=%s", err)
+	}
+
+	info := NewFileInfo(remoteFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+	return &info, s.Wait()
+}
+
 func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string, updatesPermission, setTime bool) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	localFilename = filepath.Clean(localFilename)

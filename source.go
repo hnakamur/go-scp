@@ -10,6 +10,34 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+func CopyFromReaderToRemote(client *ssh.Client, info FileInfo, r io.ReadCloser, remoteFilename string, updatesPermission, setTime bool) error {
+	remoteFilename = filepath.Clean(remoteFilename)
+	destDir := filepath.Dir(remoteFilename)
+	destFilename := filepath.Base(remoteFilename)
+	if info.name != destFilename {
+		info.name = destFilename
+	}
+
+	s, err := NewSourceSession(client, destDir, true, "", false, updatesPermission)
+	defer s.Close()
+	if err != nil {
+		return err
+	}
+	err = func() error {
+		defer s.CloseStdin()
+
+		err = s.WriteFile(info, r)
+		if err != nil {
+			return fmt.Errorf("failed to copy file: err=%s", err)
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+	return s.Wait()
+}
+
 func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string, updatesPermission, setTime bool) error {
 	localFilename = filepath.Clean(localFilename)
 	remoteFilename = filepath.Clean(remoteFilename)
