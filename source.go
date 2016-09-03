@@ -76,9 +76,16 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) 
 	return s.Wait()
 }
 
+func acceptAny(path string, info os.FileInfo, err error) error {
+	return nil
+}
+
 func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, walkFn filepath.WalkFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
+	if walkFn == nil {
+		walkFn = acceptAny
+	}
 
 	s, err := NewSourceSession(client, destDir, true, "", true, true)
 	defer s.Close()
