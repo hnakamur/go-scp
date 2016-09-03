@@ -15,7 +15,7 @@ func CopyFromReaderToRemote(client *ssh.Client, info FileInfo, r io.ReadCloser, 
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
 	if info.name != destFilename {
-		info.name = destFilename
+		info = NewFileInfo(destFilename, info.Size(), info.Mode(), info.ModTime(), info.AccessTime())
 	}
 
 	s, err := NewSourceSession(client, destDir, true, "", false, updatesPermission)

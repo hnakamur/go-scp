@@ -68,9 +68,10 @@ func NewDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) Fi
 	}
 }
 
-func (i *FileInfo) Name() string       { return i.name }
-func (i *FileInfo) Size() int64        { return i.size }
-func (i *FileInfo) Mode() os.FileMode  { return i.mode }
-func (i *FileInfo) ModTime() time.Time { return i.modTime }
-func (i *FileInfo) IsDir() bool        { return i.isDir }
-func (i *FileInfo) Sys() interface{}   { return i.sys }
+func (i *FileInfo) Name() string          { return i.name }
+func (i *FileInfo) Size() int64           { return i.size }
+func (i *FileInfo) Mode() os.FileMode     { return i.mode }
+func (i *FileInfo) ModTime() time.Time    { return i.modTime }
+func (i *FileInfo) IsDir() bool           { return i.isDir }
+func (i *FileInfo) Sys() interface{}      { return i.sys }
+func (i *FileInfo) AccessTime() time.Time { return i.sys.AccessTime }
