@@ -10,7 +10,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func CopyFromReaderToRemote(client *ssh.Client, info FileInfo, r io.ReadCloser, remoteFilename string, updatesPermission, setTime bool) error {
+func CopyFromReaderToRemote(client *ssh.Client, info FileInfo, r io.ReadCloser, remoteFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
@@ -18,7 +18,7 @@ func CopyFromReaderToRemote(client *ssh.Client, info FileInfo, r io.ReadCloser, 
 		info = NewFileInfo(destFilename, info.Size(), info.Mode(), info.ModTime(), info.AccessTime())
 	}
 
-	s, err := NewSourceSession(client, destDir, true, "", false, updatesPermission)
+	s, err := NewSourceSession(client, destDir, true, "", false, true)
 	defer s.Close()
 	if err != nil {
 		return err
@@ -38,14 +38,14 @@ func CopyFromReaderToRemote(client *ssh.Client, info FileInfo, r io.ReadCloser, 
 	return s.Wait()
 }
 
-func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string, updatesPermission, setTime bool) error {
+func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) error {
 	localFilename = filepath.Clean(localFilename)
 	remoteFilename = filepath.Clean(remoteFilename)
 
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
 
-	s, err := NewSourceSession(client, destDir, true, "", false, updatesPermission)
+	s, err := NewSourceSession(client, destDir, true, "", false, true)
 	defer s.Close()
 	if err != nil {
 		return err
@@ -57,7 +57,7 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string, 
 		if err != nil {
 			return fmt.Errorf("failed to stat source file: err=%s", err)
 		}
-		fi := NewFileInfoFromOS(osFileInfo, setTime, destFilename)
+		fi := NewFileInfoFromOS(osFileInfo, true, destFilename)
 
 		file, err := os.Open(localFilename)
 		if err != nil {
@@ -76,11 +76,11 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string, 
 	return s.Wait()
 }
 
-func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, updatesPermission, setTime bool, walkFn filepath.WalkFunc) error {
+func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, walkFn filepath.WalkFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
 
-	s, err := NewSourceSession(client, destDir, true, "", true, updatesPermission)
+	s, err := NewSourceSession(client, destDir, true, "", true, true)
 	defer s.Close()
 	if err != nil {
 		return err
@@ -141,7 +141,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, updates
 			}()
 
 			for _, newDir := range newDirs {
-				fi := NewFileInfoFromOS(info, setTime, newDir)
+				fi := NewFileInfoFromOS(info, true, newDir)
 				err := s.StartDirectory(fi)
 				if err != nil {
 					return err
@@ -149,7 +149,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, updates
 			}
 
 			if !isDir {
-				fi := NewFileInfoFromOS(info, setTime, "")
+				fi := NewFileInfoFromOS(info, true, "")
 				file, err := os.Open(path)
 				if err != nil {
 					return err

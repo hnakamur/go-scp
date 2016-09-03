@@ -41,7 +41,7 @@ func run() error {
 	}
 
 	srcDir := "/tmp/hoge"
-	return scp.CopyRecursivelyFromRemote(client, srcDir, destDir, true, true)
+	return scp.CopyRecursivelyFromRemote(client, srcDir, destDir)
 }
 
 func sshAgent() (ssh.AuthMethod, error) {

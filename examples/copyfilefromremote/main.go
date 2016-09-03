@@ -36,7 +36,7 @@ func run() error {
 
 	remoteFilename := "/tmp/test1"
 	localFilename := "/tmp/test1.txt"
-	return scp.CopyFileFromRemote(client, remoteFilename, localFilename, true, true)
+	return scp.CopyFileFromRemote(client, remoteFilename, localFilename)
 }
 
 func sshAgent() (ssh.AuthMethod, error) {

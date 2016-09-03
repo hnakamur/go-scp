@@ -36,7 +36,7 @@ func run() error {
 
 	localFilename := "main.go"
 	remoteFilename := "/tmp/foo.go"
-	return scp.CopyFileToRemote(client, localFilename, remoteFilename, true, true)
+	return scp.CopyFileToRemote(client, localFilename, remoteFilename)
 }
 
 func sshAgent() (ssh.AuthMethod, error) {

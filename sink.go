@@ -44,30 +44,26 @@ func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.W
 	return &info, s.Wait()
 }
 
-func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string, updatesPermission, setTime bool) error {
+func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	localFilename = filepath.Clean(localFilename)
 
-	s, err := NewSinkSession(client, remoteFilename, false, "", false, updatesPermission)
+	s, err := NewSinkSession(client, remoteFilename, false, "", false, true)
 	defer s.Close()
 	if err != nil {
 		return err
 	}
 
-	var timeHeader TimeMsgHeader
-	if setTime {
-		h, err := s.ReadHeaderOrReply()
-		if err != nil {
-			return fmt.Errorf("failed to read scp message header: err=%s", err)
-		}
-		var ok bool
-		timeHeader, ok = h.(TimeMsgHeader)
-		if !ok {
-			return fmt.Errorf("expected time message header, got %+v", h)
-		}
+	h, err := s.ReadHeaderOrReply()
+	if err != nil {
+		return fmt.Errorf("failed to read scp message header: err=%s", err)
+	}
+	timeHeader, ok := h.(TimeMsgHeader)
+	if !ok {
+		return fmt.Errorf("expected time message header, got %+v", h)
 	}
 
-	h, err := s.ReadHeaderOrReply()
+	h, err = s.ReadHeaderOrReply()
 	if err != nil {
 		return fmt.Errorf("failed to read scp message header: err=%s", err)
 	}
@@ -76,7 +72,7 @@ func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string
 		return fmt.Errorf("expected file message header, got %+v", h)
 	}
 
-	err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, updatesPermission, setTime)
+	err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
 	if err != nil {
 		return err
 	}
@@ -113,11 +109,11 @@ func copyFileBodyFromRemote(s *SinkSession, localFilename string, timeHeader Tim
 	return nil
 }
 
-func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updatesPermission, setTime bool) error {
+func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
 
-	s, err := NewSinkSession(client, srcDir, true, "", true, updatesPermission)
+	s, err := NewSinkSession(client, srcDir, true, "", true, true)
 	defer s.Close()
 	if err != nil {
 		return err
@@ -149,18 +145,14 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updat
 				return fmt.Errorf("failed to create directory: err=%s", err)
 			}
 
-			if updatesPermission {
-				err := os.Chmod(curDir, dirHeader.Mode)
-				if err != nil {
-					return fmt.Errorf("failed to change directory mode: err=%s", err)
-				}
+			err = os.Chmod(curDir, dirHeader.Mode)
+			if err != nil {
+				return fmt.Errorf("failed to change directory mode: err=%s", err)
 			}
 
-			if setTime {
-				timeHeaders = append(timeHeaders, timeHeader)
-			}
+			timeHeaders = append(timeHeaders, timeHeader)
 		case EndDirectoryMsgHeader:
-			if setTime && len(timeHeaders) > 0 {
+			if len(timeHeaders) > 0 {
 				timeHeader = timeHeaders[len(timeHeaders)-1]
 				timeHeaders = timeHeaders[:len(timeHeaders)-1]
 				err := os.Chtimes(curDir, timeHeader.Atime, timeHeader.Mtime)
@@ -172,7 +164,7 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, updat
 		case FileMsgHeader:
 			fileHeader := h.(FileMsgHeader)
 			localFilename := filepath.Join(curDir, fileHeader.Name)
-			err := copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, updatesPermission, setTime)
+			err := copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
 			if err != nil {
 				return err
 			}

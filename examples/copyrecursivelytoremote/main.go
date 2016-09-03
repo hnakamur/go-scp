@@ -48,7 +48,7 @@ func run() error {
 		}
 		return nil
 	}
-	return scp.CopyRecursivelyToRemote(client, srcDir, destDir, true, true, walkFn)
+	return scp.CopyRecursivelyToRemote(client, srcDir, destDir, walkFn)
 }
 
 func runCommand(client *ssh.Client, cmd string) error {
