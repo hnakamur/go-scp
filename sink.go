@@ -68,11 +68,11 @@ func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string
 			return fmt.Errorf("expected file message header, got %+v", h)
 		}
 
-		return copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
+		return copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader)
 	})
 }
 
-func copyFileBodyFromRemote(s *SinkSession, localFilename string, timeHeader TimeMsgHeader, fileHeader FileMsgHeader, updatesPermission, setTime bool) error {
+func copyFileBodyFromRemote(s *SinkSession, localFilename string, timeHeader TimeMsgHeader, fileHeader FileMsgHeader) error {
 	file, err := os.OpenFile(localFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileHeader.Mode)
 	if err != nil {
 		return fmt.Errorf("failed to open destination file: err=%s", err)
@@ -85,18 +85,14 @@ func copyFileBodyFromRemote(s *SinkSession, localFilename string, timeHeader Tim
 	}
 	file.Close()
 
-	if updatesPermission {
-		err := os.Chmod(localFilename, fileHeader.Mode)
-		if err != nil {
-			return fmt.Errorf("failed to change file mode: err=%s", err)
-		}
+	err = os.Chmod(localFilename, fileHeader.Mode)
+	if err != nil {
+		return fmt.Errorf("failed to change file mode: err=%s", err)
 	}
 
-	if setTime {
-		err := os.Chtimes(localFilename, timeHeader.Atime, timeHeader.Mtime)
-		if err != nil {
-			return fmt.Errorf("failed to change file time: err=%s", err)
-		}
+	err = os.Chtimes(localFilename, timeHeader.Atime, timeHeader.Mtime)
+	if err != nil {
+		return fmt.Errorf("failed to change file time: err=%s", err)
 	}
 
 	return nil
@@ -198,7 +194,7 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 					if !accepted {
 						continue
 					}
-					err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
+					err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader)
 					if err != nil {
 						return err
 					}
