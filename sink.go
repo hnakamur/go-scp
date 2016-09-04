@@ -148,7 +148,6 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 
 			dirHeader := h.(StartDirectoryMsgHeader)
 			curDir = filepath.Join(curDir, dirHeader.Name)
-			fmt.Printf("StartDir name=%s, skipBaseDir=%s\n", curDir, skipBaseDir)
 			timeHeaders = append(timeHeaders, timeHeader)
 
 			if skipBaseDir != "" {
@@ -162,11 +161,9 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 			}
 			if !accepted {
 				skipBaseDir = curDir
-				fmt.Printf("Set skipBaseDir to %s\n", skipBaseDir)
 				continue
 			}
 
-			fmt.Printf("MkdirAll dir=%s\n", curDir)
 			err = os.MkdirAll(curDir, dirHeader.Mode)
 			if err != nil {
 				return fmt.Errorf("failed to create directory: err=%s", err)
@@ -188,7 +185,6 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 				}
 			}
 			curDir = filepath.Dir(curDir)
-			fmt.Printf("EndDir name=%s, skipBaseDir=%s\n", curDir, skipBaseDir)
 			if skipBaseDir != "" {
 				var sub bool
 				if curDir == "" {
@@ -202,13 +198,11 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 				}
 				if !sub {
 					skipBaseDir = ""
-					fmt.Printf("Reset skipBaseDir\n")
 				}
 			}
 		case FileMsgHeader:
 			fileHeader := h.(FileMsgHeader)
 			localFilename := filepath.Join(curDir, fileHeader.Name)
-			fmt.Printf("File name=%s, skipBaseDir=%s\n", localFilename, skipBaseDir)
 			if skipBaseDir == "" {
 				info := NewFileInfo(localFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
 				accepted, err := acceptFn(info)
