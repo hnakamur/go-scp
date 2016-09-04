@@ -76,15 +76,17 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) 
 	return s.Wait()
 }
 
-func acceptAny(path string, info os.FileInfo, err error) error {
-	return nil
+type AcceptFunc func(info FileInfo) (bool, error)
+
+func acceptAny(info FileInfo) (bool, error) {
+	return true, nil
 }
 
-func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, walkFn filepath.WalkFunc) error {
+func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptFn AcceptFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
-	if walkFn == nil {
-		walkFn = acceptAny
+	if acceptFn == nil {
+		acceptFn = acceptAny
 	}
 
 	s, err := NewSourceSession(client, destDir, true, "", true, true)
@@ -138,9 +140,13 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, walkFn 
 				return err
 			}
 
-			err = walkFn(path, info, err)
+			scpFileInfo := NewFileInfoFromOS(info, true, path)
+			accepted, err := acceptFn(scpFileInfo)
 			if err != nil {
 				return err
+			}
+			if isDir && !accepted {
+				return filepath.SkipDir
 			}
 
 			defer func() {
@@ -155,7 +161,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, walkFn 
 				}
 			}
 
-			if !isDir {
+			if !isDir && accepted {
 				fi := NewFileInfoFromOS(info, true, "")
 				file, err := os.Open(path)
 				if err != nil {

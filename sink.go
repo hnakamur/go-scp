@@ -3,8 +3,10 @@ package scp
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -109,9 +111,13 @@ func copyFileBodyFromRemote(s *SinkSession, localFilename string, timeHeader Tim
 	return nil
 }
 
-func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string) error {
+func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, acceptFn AcceptFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
+
+	if acceptFn == nil {
+		acceptFn = acceptAny
+	}
 
 	s, err := NewSinkSession(client, srcDir, true, "", true, true)
 	defer s.Close()
@@ -123,6 +129,7 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string) error
 	var timeHeader TimeMsgHeader
 	var timeHeaders []TimeMsgHeader
 	isFirstStartDirectory := true
+	var skipBaseDir string
 	for {
 		h, err := s.ReadHeaderOrReply()
 		if err == io.EOF {
@@ -138,9 +145,29 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string) error
 				isFirstStartDirectory = false
 				continue
 			}
+
 			dirHeader := h.(StartDirectoryMsgHeader)
 			curDir = filepath.Join(curDir, dirHeader.Name)
-			err := os.MkdirAll(curDir, dirHeader.Mode)
+			fmt.Printf("StartDir name=%s, skipBaseDir=%s\n", curDir, skipBaseDir)
+			timeHeaders = append(timeHeaders, timeHeader)
+
+			if skipBaseDir != "" {
+				continue
+			}
+
+			info := NewDirInfo(curDir, dirHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+			accepted, err := acceptFn(info)
+			if err != nil {
+				return fmt.Errorf("error from accessFn: err=%s", err)
+			}
+			if !accepted {
+				skipBaseDir = curDir
+				fmt.Printf("Set skipBaseDir to %s\n", skipBaseDir)
+				continue
+			}
+
+			fmt.Printf("MkdirAll dir=%s\n", curDir)
+			err = os.MkdirAll(curDir, dirHeader.Mode)
 			if err != nil {
 				return fmt.Errorf("failed to create directory: err=%s", err)
 			}
@@ -149,30 +176,71 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string) error
 			if err != nil {
 				return fmt.Errorf("failed to change directory mode: err=%s", err)
 			}
-
-			timeHeaders = append(timeHeaders, timeHeader)
 		case EndDirectoryMsgHeader:
 			if len(timeHeaders) > 0 {
 				timeHeader = timeHeaders[len(timeHeaders)-1]
 				timeHeaders = timeHeaders[:len(timeHeaders)-1]
-				err := os.Chtimes(curDir, timeHeader.Atime, timeHeader.Mtime)
-				if err != nil {
-					return fmt.Errorf("failed to change directory time: err=%s", err)
+				if skipBaseDir == "" {
+					err := os.Chtimes(curDir, timeHeader.Atime, timeHeader.Mtime)
+					if err != nil {
+						return fmt.Errorf("failed to change directory time: err=%s", err)
+					}
 				}
 			}
 			curDir = filepath.Dir(curDir)
+			fmt.Printf("EndDir name=%s, skipBaseDir=%s\n", curDir, skipBaseDir)
+			if skipBaseDir != "" {
+				var sub bool
+				if curDir == "" {
+					sub = true
+				} else {
+					var err error
+					sub, err = isSubdirectory(skipBaseDir, curDir)
+					if err != nil {
+						return fmt.Errorf("failed to check directory is subdirectory: err=%s", err)
+					}
+				}
+				if !sub {
+					skipBaseDir = ""
+					fmt.Printf("Reset skipBaseDir\n")
+				}
+			}
 		case FileMsgHeader:
 			fileHeader := h.(FileMsgHeader)
 			localFilename := filepath.Join(curDir, fileHeader.Name)
-			err := copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
-			if err != nil {
-				return err
+			fmt.Printf("File name=%s, skipBaseDir=%s\n", localFilename, skipBaseDir)
+			if skipBaseDir == "" {
+				info := NewFileInfo(localFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+				accepted, err := acceptFn(info)
+				if err != nil {
+					return fmt.Errorf("error from accessFn: err=%s", err)
+				}
+				if !accepted {
+					continue
+				}
+				err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
+				if err != nil {
+					return err
+				}
+			} else {
+				err = s.CopyFileBodyTo(fileHeader, ioutil.Discard)
+				if err != nil {
+					return err
+				}
 			}
 		case OKMsg:
 			// do nothing
 		}
 	}
 	return s.Wait()
+}
+
+func isSubdirectory(basepath, targetpath string) (bool, error) {
+	rel, err := filepath.Rel(basepath, targetpath)
+	if err != nil {
+		return false, err
+	}
+	return !strings.HasPrefix(rel, ".."+string([]rune{filepath.Separator})), nil
 }
 
 type SinkSession struct {

@@ -42,13 +42,13 @@ func run() error {
 	}
 
 	srcDir := filepath.Join(os.Getenv("HOME"), "gocode", "src", "bitbucket.org", "hnakamur", "scp")
-	walkFn := func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == ".git" {
-			return filepath.SkipDir
-		}
-		return nil
-	}
-	return scp.CopyRecursivelyToRemote(client, srcDir, destDir, walkFn)
+	//walkFn := func(path string, info os.FileInfo, err error) error {
+	//	if filepath.Base(path) == ".git" {
+	//		return filepath.SkipDir
+	//	}
+	//	return nil
+	//}
+	return scp.CopyRecursivelyToRemote(client, srcDir, destDir, nil)
 }
 
 func runCommand(client *ssh.Client, cmd string) error {

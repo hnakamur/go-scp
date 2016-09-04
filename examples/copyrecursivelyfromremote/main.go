@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 
 	"bitbucket.org/hnakamur/scp"
 
@@ -41,7 +43,12 @@ func run() error {
 	}
 
 	srcDir := "/tmp/hoge"
-	return scp.CopyRecursivelyFromRemote(client, srcDir, destDir)
+	acceptFn := func(info scp.FileInfo) (bool, error) {
+		accepted := !info.IsDir() || info.Name() != filepath.Join(destDir, ".git")
+		fmt.Printf("acceptFn info=%+v, accepted=%v\n", info, accepted)
+		return accepted, nil
+	}
+	return scp.CopyRecursivelyFromRemote(client, srcDir, destDir, acceptFn)
 }
 
 func sshAgent() (ssh.AuthMethod, error) {
