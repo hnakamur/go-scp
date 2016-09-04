@@ -133,7 +133,7 @@ func (s *sourceProtocol) readReply() error {
 	if err != nil {
 		return fmt.Errorf("failed to read scp reply message: err=%s", err)
 	}
-	return &ProtocolError{
+	return &protocolError{
 		msg:   line,
 		fatal: b == replyFatalError,
 	}
@@ -275,7 +275,7 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 			}
 		}
 
-		return nil, &ProtocolError{
+		return nil, &protocolError{
 			msg:   line,
 			fatal: b == replyFatalError,
 		}

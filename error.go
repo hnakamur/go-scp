@@ -1,9 +1,9 @@
 package scp
 
-type ProtocolError struct {
+type protocolError struct {
 	msg   string
 	fatal bool
 }
 
-func (e *ProtocolError) Error() string { return e.msg }
-func (e *ProtocolError) Fatal() bool   { return e.fatal }
+func (e *protocolError) Error() string { return e.msg }
+func (e *protocolError) Fatal() bool   { return e.fatal }
