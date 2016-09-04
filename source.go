@@ -13,6 +13,8 @@ import (
 // CopyFromReaderToRemote reads a single local file content from the r,
 // and copies it to the remote file with the name remoteFilename.
 // The time and permission will be set with the value of info.
+// The r will be closed after copying. If you don't want for r to be
+// closed, you can pass the result of ioutil.NopCloser(r).
 func CopyFromReaderToRemote(client *ssh.Client, info *FileInfo, r io.ReadCloser, remoteFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	destDir := filepath.Dir(remoteFilename)
