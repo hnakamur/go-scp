@@ -13,7 +13,7 @@ import (
 
 func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.Writer) (*FileInfo, error) {
 	var info *FileInfo
-	err := RunSinkSession(client, remoteFilename, false, "", false, true, func(s *SinkSession) error {
+	err := runSinkSession(client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
 		var timeHeader TimeMsgHeader
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
@@ -49,7 +49,7 @@ func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string
 	remoteFilename = filepath.Clean(remoteFilename)
 	localFilename = filepath.Clean(localFilename)
 
-	return RunSinkSession(client, remoteFilename, false, "", false, true, func(s *SinkSession) error {
+	return runSinkSession(client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
 			return fmt.Errorf("failed to read scp message header: err=%s", err)
@@ -72,7 +72,7 @@ func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string
 	})
 }
 
-func copyFileBodyFromRemote(s *SinkSession, localFilename string, timeHeader TimeMsgHeader, fileHeader FileMsgHeader) error {
+func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader TimeMsgHeader, fileHeader FileMsgHeader) error {
 	file, err := os.OpenFile(localFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileHeader.Mode)
 	if err != nil {
 		return fmt.Errorf("failed to open destination file: err=%s", err)
@@ -106,7 +106,7 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 		acceptFn = acceptAny
 	}
 
-	return RunSinkSession(client, srcDir, true, "", true, true, func(s *SinkSession) error {
+	return runSinkSession(client, srcDir, true, "", true, true, func(s *sinkSession) error {
 		curDir := destDir
 		var timeHeader TimeMsgHeader
 		var timeHeaders []TimeMsgHeader
@@ -220,7 +220,7 @@ func isSubdirectory(basepath, targetpath string) (bool, error) {
 	return !strings.HasPrefix(rel, ".."+string([]rune{filepath.Separator})), nil
 }
 
-type SinkSession struct {
+type sinkSession struct {
 	client            *ssh.Client
 	session           *ssh.Session
 	remoteSrcPath     string
@@ -233,8 +233,8 @@ type SinkSession struct {
 	*sinkProtocol
 }
 
-func NewSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool) (*SinkSession, error) {
-	s := &SinkSession{
+func newSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool) (*sinkSession, error) {
+	s := &sinkSession{
 		client:            client,
 		remoteSrcPath:     remoteSrcPath,
 		remoteSrcIsDir:    remoteSrcIsDir,
@@ -284,22 +284,22 @@ func NewSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir boo
 	return s, err
 }
 
-func (s *SinkSession) Close() error {
+func (s *sinkSession) Close() error {
 	if s == nil || s.session == nil {
 		return nil
 	}
 	return s.session.Close()
 }
 
-func (s *SinkSession) Wait() error {
+func (s *sinkSession) Wait() error {
 	if s == nil || s.session == nil {
 		return nil
 	}
 	return s.session.Wait()
 }
 
-func RunSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool, handler func(s *SinkSession) error) error {
-	s, err := NewSinkSession(client, remoteSrcPath, remoteSrcIsDir, scpPath, recursive, updatesPermission)
+func runSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool, handler func(s *sinkSession) error) error {
+	s, err := newSinkSession(client, remoteSrcPath, remoteSrcIsDir, scpPath, recursive, updatesPermission)
 	defer s.Close()
 	if err != nil {
 		return err
