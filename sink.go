@@ -274,7 +274,7 @@ func NewSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir boo
 		opt = append(opt, 'd')
 	}
 
-	cmd := s.scpPath + " " + string(opt) + " " + EscapeShellArg(s.remoteSrcPath)
+	cmd := s.scpPath + " " + string(opt) + " " + escapeShellArg(s.remoteSrcPath)
 	err = s.session.Start(cmd)
 	if err != nil {
 		return s, err

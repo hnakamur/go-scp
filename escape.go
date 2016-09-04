@@ -2,6 +2,6 @@ package scp
 
 import "strings"
 
-func EscapeShellArg(arg string) string {
+func escapeShellArg(arg string) string {
 	return "'" + strings.Replace(arg, "'", `'\''`, -1) + "'"
 }

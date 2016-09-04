@@ -212,7 +212,7 @@ func NewSourceSession(client *ssh.Client, remoteDestPath string, remoteDestIsDir
 		opt = append(opt, 'd')
 	}
 
-	cmd := s.scpPath + " " + string(opt) + " " + EscapeShellArg(s.remoteDestPath)
+	cmd := s.scpPath + " " + string(opt) + " " + escapeShellArg(s.remoteDestPath)
 	err = s.session.Start(cmd)
 	if err != nil {
 		return s, err
