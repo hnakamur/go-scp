@@ -14,13 +14,13 @@ import (
 func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.Writer) (*FileInfo, error) {
 	var info *FileInfo
 	err := runSinkSession(client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
-		var timeHeader TimeMsgHeader
+		var timeHeader timeMsgHeader
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
 			return fmt.Errorf("failed to read scp message header: err=%s", err)
 		}
 		var ok bool
-		timeHeader, ok = h.(TimeMsgHeader)
+		timeHeader, ok = h.(timeMsgHeader)
 		if !ok {
 			return fmt.Errorf("expected time message header, got %+v", h)
 		}
@@ -29,7 +29,7 @@ func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.W
 		if err != nil {
 			return fmt.Errorf("failed to read scp message header: err=%s", err)
 		}
-		fileHeader, ok := h.(FileMsgHeader)
+		fileHeader, ok := h.(fileMsgHeader)
 		if !ok {
 			return fmt.Errorf("expected file message header, got %+v", h)
 		}
@@ -54,7 +54,7 @@ func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string
 		if err != nil {
 			return fmt.Errorf("failed to read scp message header: err=%s", err)
 		}
-		timeHeader, ok := h.(TimeMsgHeader)
+		timeHeader, ok := h.(timeMsgHeader)
 		if !ok {
 			return fmt.Errorf("expected time message header, got %+v", h)
 		}
@@ -63,7 +63,7 @@ func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string
 		if err != nil {
 			return fmt.Errorf("failed to read scp message header: err=%s", err)
 		}
-		fileHeader, ok := h.(FileMsgHeader)
+		fileHeader, ok := h.(fileMsgHeader)
 		if !ok {
 			return fmt.Errorf("expected file message header, got %+v", h)
 		}
@@ -72,7 +72,7 @@ func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string
 	})
 }
 
-func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader TimeMsgHeader, fileHeader FileMsgHeader) error {
+func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader timeMsgHeader, fileHeader fileMsgHeader) error {
 	file, err := os.OpenFile(localFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileHeader.Mode)
 	if err != nil {
 		return fmt.Errorf("failed to open destination file: err=%s", err)
@@ -108,8 +108,8 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 
 	return runSinkSession(client, srcDir, true, "", true, true, func(s *sinkSession) error {
 		curDir := destDir
-		var timeHeader TimeMsgHeader
-		var timeHeaders []TimeMsgHeader
+		var timeHeader timeMsgHeader
+		var timeHeaders []timeMsgHeader
 		isFirstStartDirectory := true
 		var skipBaseDir string
 		for {
@@ -120,15 +120,15 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 				return fmt.Errorf("failed to read scp message header: err=%s", err)
 			}
 			switch h.(type) {
-			case TimeMsgHeader:
-				timeHeader = h.(TimeMsgHeader)
-			case StartDirectoryMsgHeader:
+			case timeMsgHeader:
+				timeHeader = h.(timeMsgHeader)
+			case startDirectoryMsgHeader:
 				if isFirstStartDirectory {
 					isFirstStartDirectory = false
 					continue
 				}
 
-				dirHeader := h.(StartDirectoryMsgHeader)
+				dirHeader := h.(startDirectoryMsgHeader)
 				curDir = filepath.Join(curDir, dirHeader.Name)
 				timeHeaders = append(timeHeaders, timeHeader)
 
@@ -155,7 +155,7 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 				if err != nil {
 					return fmt.Errorf("failed to change directory mode: err=%s", err)
 				}
-			case EndDirectoryMsgHeader:
+			case endDirectoryMsgHeader:
 				if len(timeHeaders) > 0 {
 					timeHeader = timeHeaders[len(timeHeaders)-1]
 					timeHeaders = timeHeaders[:len(timeHeaders)-1]
@@ -182,8 +182,8 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 						skipBaseDir = ""
 					}
 				}
-			case FileMsgHeader:
-				fileHeader := h.(FileMsgHeader)
+			case fileMsgHeader:
+				fileHeader := h.(fileMsgHeader)
 				localFilename := filepath.Join(curDir, fileHeader.Name)
 				if skipBaseDir == "" {
 					info := newFileInfo(localFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
@@ -204,7 +204,7 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 						return err
 					}
 				}
-			case OKMsg:
+			case okMsg:
 				// do nothing
 			}
 		}

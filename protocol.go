@@ -159,25 +159,25 @@ func newSinkProtocol(remIn io.WriteCloser, remOut io.Reader) (*sinkProtocol, err
 	return s, nil
 }
 
-type TimeMsgHeader struct {
+type timeMsgHeader struct {
 	Mtime time.Time
 	Atime time.Time
 }
 
-type StartDirectoryMsgHeader struct {
+type startDirectoryMsgHeader struct {
 	Mode os.FileMode
 	Name string
 }
 
-type EndDirectoryMsgHeader struct{}
+type endDirectoryMsgHeader struct{}
 
-type FileMsgHeader struct {
+type fileMsgHeader struct {
 	Mode os.FileMode
 	Size int64
 	Name string
 }
 
-type OKMsg struct{}
+type okMsg struct{}
 
 func fromSecondsAndMicroseconds(seconds int64, microseconds int) time.Time {
 	return time.Unix(seconds, int64(microseconds)*(int64(time.Microsecond)/int64(time.Nanosecond)))
@@ -192,7 +192,7 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 	}
 	switch b {
 	case msgCopyFile:
-		var h FileMsgHeader
+		var h fileMsgHeader
 		n, err := fmt.Fscanf(s.remReader, "%04o %d %s\n", &h.Mode, &h.Size, &h.Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read scp file message header: err=%s", err)
@@ -208,7 +208,7 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 
 		return h, nil
 	case msgStartDirectory:
-		var h StartDirectoryMsgHeader
+		var h startDirectoryMsgHeader
 		var dummySize int64
 		n, err := fmt.Fscanf(s.remReader, "%04o %d %s\n", &h.Mode, &dummySize, &h.Name)
 		if err != nil {
@@ -235,7 +235,7 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 			return nil, fmt.Errorf("failed to write scp replyOK reply: err=%s", err)
 		}
 
-		return EndDirectoryMsgHeader{}, nil
+		return endDirectoryMsgHeader{}, nil
 	case msgTime:
 		var ms int64
 		var mus int
@@ -254,14 +254,14 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 			return nil, fmt.Errorf("failed to write scp replyOK reply: err=%s", err)
 		}
 
-		h := TimeMsgHeader{
+		h := timeMsgHeader{
 			Mtime: fromSecondsAndMicroseconds(ms, mus),
 			Atime: fromSecondsAndMicroseconds(as, aus),
 		}
 
 		return h, nil
 	case replyOK:
-		return OKMsg{}, nil
+		return okMsg{}, nil
 	case replyError, replyFatalError:
 		line, err := s.remReader.ReadString('\n')
 		if err != nil {
@@ -284,7 +284,7 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 	}
 }
 
-func (s *sinkProtocol) CopyFileBodyTo(h FileMsgHeader, w io.Writer) error {
+func (s *sinkProtocol) CopyFileBodyTo(h fileMsgHeader, w io.Writer) error {
 	lr := io.LimitReader(s.remReader, h.Size)
 	n, err := io.Copy(w, lr)
 	if err == io.EOF {
