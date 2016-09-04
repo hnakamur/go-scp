@@ -39,8 +39,8 @@ func newSourceProtocol(remIn io.WriteCloser, remOut io.Reader) (*sourceProtocol,
 }
 
 func (s *sourceProtocol) WriteFile(fileInfo FileInfo, body io.ReadCloser) error {
-	if !fileInfo.modTime.IsZero() || !fileInfo.sys.AccessTime.IsZero() {
-		err := s.setTime(fileInfo.modTime, fileInfo.sys.AccessTime)
+	if !fileInfo.modTime.IsZero() || !fileInfo.accessTime.IsZero() {
+		err := s.setTime(fileInfo.modTime, fileInfo.accessTime)
 		if err != nil {
 			return err
 		}
@@ -49,8 +49,8 @@ func (s *sourceProtocol) WriteFile(fileInfo FileInfo, body io.ReadCloser) error 
 }
 
 func (s *sourceProtocol) StartDirectory(dirInfo FileInfo) error {
-	if !dirInfo.modTime.IsZero() || !dirInfo.sys.AccessTime.IsZero() {
-		err := s.setTime(dirInfo.modTime, dirInfo.sys.AccessTime)
+	if !dirInfo.modTime.IsZero() || !dirInfo.accessTime.IsZero() {
+		err := s.setTime(dirInfo.modTime, dirInfo.accessTime)
 		if err != nil {
 			return err
 		}
