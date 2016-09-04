@@ -16,6 +16,18 @@ type FileInfo struct {
 	accessTime time.Time
 }
 
+// NewFileInfo creates a file information. The filepath.Base(name) is
+// used as the name and the mode is masked with (os.ModePerm | os.ModeDir).
+func NewFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) *FileInfo {
+	return &FileInfo{
+		name:       filepath.Base(name),
+		size:       size,
+		mode:       mode & (os.ModePerm | os.ModeDir),
+		modTime:    modTime,
+		accessTime: accessTime,
+	}
+}
+
 func newFileInfoFromOS(fi os.FileInfo, replaceName string) *FileInfo {
 	var name string
 	if replaceName == "" {
@@ -33,29 +45,7 @@ func newFileInfoFromOS(fi os.FileInfo, replaceName string) *FileInfo {
 		accessTime = time.Unix(sec, nsec)
 	}
 
-	if fi.IsDir() {
-		return newDirInfo(name, fi.Mode(), modTime, accessTime)
-	}
-	return newFileInfo(name, fi.Size(), fi.Mode(), modTime, accessTime)
-}
-
-func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) *FileInfo {
-	return &FileInfo{
-		name:       filepath.Base(name),
-		size:       size,
-		mode:       mode & os.ModePerm,
-		modTime:    modTime,
-		accessTime: accessTime,
-	}
-}
-
-func newDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) *FileInfo {
-	return &FileInfo{
-		name:       filepath.Base(name),
-		mode:       (mode & os.ModePerm) | os.ModeDir,
-		modTime:    modTime,
-		accessTime: accessTime,
-	}
+	return NewFileInfo(name, fi.Size(), fi.Mode(), modTime, accessTime)
 }
 
 // Name returns base name of the file.

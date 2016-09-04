@@ -18,7 +18,7 @@ func CopyFromReaderToRemote(client *ssh.Client, info *FileInfo, r io.ReadCloser,
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
 	if info.name != destFilename {
-		info = newFileInfo(destFilename, info.size, info.mode, info.modTime, info.accessTime)
+		info = NewFileInfo(destFilename, info.size, info.mode, info.modTime, info.accessTime)
 	}
 
 	return runSourceSession(client, destDir, true, "", false, true, func(s *sourceSession) error {
@@ -65,7 +65,7 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) 
 // In CopyRecursivelyFromRemote, parentDir will be a directory under destDir.
 type AcceptFunc func(parentDir string, info os.FileInfo) (bool, error)
 
-func acceptAny(parentDirstring, info os.FileInfo) (bool, error) {
+func acceptAny(parentDir string, info os.FileInfo) (bool, error) {
 	return true, nil
 }
 
