@@ -12,10 +12,10 @@ type FileInfo struct {
 	mode    os.FileMode
 	modTime time.Time
 	isDir   bool
-	sys     SysFileInfo
+	sys     sysFileInfo
 }
 
-type SysFileInfo struct {
+type sysFileInfo struct {
 	AccessTime time.Time
 }
 
@@ -54,7 +54,7 @@ func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime 
 		size:    size,
 		mode:    mode,
 		modTime: modTime,
-		sys:     SysFileInfo{AccessTime: accessTime},
+		sys:     sysFileInfo{AccessTime: accessTime},
 	}
 }
 
@@ -64,7 +64,7 @@ func newDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) Fi
 		mode:    mode,
 		modTime: modTime,
 		isDir:   true,
-		sys:     SysFileInfo{AccessTime: accessTime},
+		sys:     sysFileInfo{AccessTime: accessTime},
 	}
 }
 
