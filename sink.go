@@ -11,8 +11,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.Writer) (*FileInfo, error) {
-	var info *FileInfo
+func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.Writer) (os.FileInfo, error) {
+	var info os.FileInfo
 	err := runSinkSession(client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
 		h, err := s.ReadHeaderOrReply()
