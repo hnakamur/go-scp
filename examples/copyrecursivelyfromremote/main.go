@@ -43,7 +43,7 @@ func run() error {
 	}
 
 	srcDir := "/tmp/hoge"
-	acceptFn := func(info scp.FileInfo) (bool, error) {
+	acceptFn := func(info os.FileInfo) (bool, error) {
 		accepted := info.Name() != filepath.Join(destDir, ".git")
 		fmt.Printf("acceptFn info=%+v, accepted=%v\n", info, accepted)
 		return accepted, nil

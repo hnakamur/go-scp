@@ -38,8 +38,7 @@ func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.W
 			return fmt.Errorf("failed to copy file: err=%s", err)
 		}
 
-		tmpInfo := newFileInfo(remoteFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
-		info = &tmpInfo
+		info = newFileInfo(remoteFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
 		return nil
 	})
 	return info, err

@@ -38,7 +38,7 @@ func newSourceProtocol(remIn io.WriteCloser, remOut io.Reader) (*sourceProtocol,
 	return s, s.readReply()
 }
 
-func (s *sourceProtocol) WriteFile(fileInfo FileInfo, body io.ReadCloser) error {
+func (s *sourceProtocol) WriteFile(fileInfo *FileInfo, body io.ReadCloser) error {
 	if !fileInfo.modTime.IsZero() || !fileInfo.accessTime.IsZero() {
 		err := s.setTime(fileInfo.modTime, fileInfo.accessTime)
 		if err != nil {
@@ -48,7 +48,7 @@ func (s *sourceProtocol) WriteFile(fileInfo FileInfo, body io.ReadCloser) error 
 	return s.writeFile(fileInfo.mode, fileInfo.size, fileInfo.name, body)
 }
 
-func (s *sourceProtocol) StartDirectory(dirInfo FileInfo) error {
+func (s *sourceProtocol) StartDirectory(dirInfo *FileInfo) error {
 	if !dirInfo.modTime.IsZero() || !dirInfo.accessTime.IsZero() {
 		err := s.setTime(dirInfo.modTime, dirInfo.accessTime)
 		if err != nil {
@@ -78,7 +78,7 @@ func toSecondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 }
 
 func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
-	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode, length, filepath.Base(filename))
+	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode&os.ModePerm, length, filepath.Base(filename))
 	if err != nil {
 		return fmt.Errorf("failed to write scp file header: err=%s", err)
 	}
@@ -103,7 +103,7 @@ func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename stri
 func (s *sourceProtocol) startDirectory(mode os.FileMode, dirname string) error {
 	// length is not used.
 	length := 0
-	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgStartDirectory, mode, length, filepath.Base(dirname))
+	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgStartDirectory, mode&os.ModePerm, length, filepath.Base(dirname))
 	if err != nil {
 		return fmt.Errorf("failed to write scp start directory header: err=%s", err)
 	}

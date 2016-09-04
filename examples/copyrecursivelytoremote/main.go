@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -36,7 +37,7 @@ func run() error {
 	defer client.Close()
 
 	destDir := "/tmp/hoge"
-	err = runCommand(client, "mkdir -p "+scp.EscapeShellArg(destDir))
+	err = runCommand(client, fmt.Sprintf("mkdir -p %s", destDir))
 	if err != nil {
 		return err
 	}

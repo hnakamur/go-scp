@@ -14,7 +14,7 @@ type FileInfo struct {
 	accessTime time.Time
 }
 
-func newFileInfoFromOS(fi os.FileInfo, replaceName string) FileInfo {
+func newFileInfoFromOS(fi os.FileInfo, replaceName string) *FileInfo {
 	var name string
 	if replaceName == "" {
 		name = fi.Name()
@@ -37,8 +37,8 @@ func newFileInfoFromOS(fi os.FileInfo, replaceName string) FileInfo {
 	return newFileInfo(name, fi.Size(), fi.Mode(), modTime, accessTime)
 }
 
-func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
-	return FileInfo{
+func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) *FileInfo {
+	return &FileInfo{
 		name:       name,
 		size:       size,
 		mode:       mode & os.ModePerm,
@@ -47,8 +47,8 @@ func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime 
 	}
 }
 
-func newDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
-	return FileInfo{
+func newDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) *FileInfo {
+	return &FileInfo{
 		name:       name,
 		mode:       (mode & os.ModePerm) | os.ModeDir,
 		modTime:    modTime,
@@ -73,3 +73,6 @@ func (i *FileInfo) IsDir() bool { return i.mode.IsDir() }
 
 // Sys returns underlying data source (can return nil)
 func (i *FileInfo) Sys() interface{} { return i }
+
+// AccessTime returns access time
+func (i *FileInfo) AccessTime() time.Time { return i.accessTime }
