@@ -43,9 +43,8 @@ func newFileInfoFromOS(fi os.FileInfo, setTime bool, replaceName string) FileInf
 
 	if fi.IsDir() {
 		return newDirInfo(name, mode, modTime, accessTime)
-	} else {
-		return newFileInfo(name, fi.Size(), mode, modTime, accessTime)
 	}
+	return newFileInfo(name, fi.Size(), mode, modTime, accessTime)
 }
 
 func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
