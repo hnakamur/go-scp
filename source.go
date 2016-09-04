@@ -10,6 +10,9 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// CopyFromReaderToRemote reads a single local file content from the r,
+// and copies it to the remote file with the name remoteFilename.
+// The time and permission will be set with the value of info.
 func CopyFromReaderToRemote(client *ssh.Client, info *FileInfo, r io.ReadCloser, remoteFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	destDir := filepath.Dir(remoteFilename)
@@ -27,6 +30,8 @@ func CopyFromReaderToRemote(client *ssh.Client, info *FileInfo, r io.ReadCloser,
 	})
 }
 
+// CopyFileToRemote copies a single local file to the remote server.
+// The time and permission will be set with the value of the source file.
 func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) error {
 	localFilename = filepath.Clean(localFilename)
 	remoteFilename = filepath.Clean(remoteFilename)
@@ -54,12 +59,23 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) 
 	})
 }
 
-type AcceptFunc func(dir string, info os.FileInfo) (bool, error)
+// AcceptFunc is the type of the function called for each file or directory
+// to determine whether is should be copied or not.
+// In CopyRecursivelyToRemote, parentDir will be a directory under srcDir.
+// In CopyRecursivelyFromRemote, parentDir will be a directory under destDir.
+type AcceptFunc func(parentDir string, info os.FileInfo) (bool, error)
 
-func acceptAny(dir string, info os.FileInfo) (bool, error) {
+func acceptAny(parentDirstring, info os.FileInfo) (bool, error) {
 	return true, nil
 }
 
+// CopyRecursivelyToRemote copies files and directories under the local srcDir to
+// to the remote destDir. You can filter the files and directories to be copied with acceptFn.
+// However this filtering is done at the receiver side, so all file bodies are transferred
+// over the network even if some files are filtered out. If you need more efficiency,
+// it is better to use another method like the tar command.
+// If acceptFn is nil, all files and directories will be copied.
+// The time and permission will be set to the same value of the source file or directory.
 func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptFn AcceptFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
