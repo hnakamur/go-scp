@@ -19,7 +19,7 @@ type SysFileInfo struct {
 	AccessTime time.Time
 }
 
-func NewFileInfoFromOS(fi os.FileInfo, setTime bool, replaceName string) FileInfo {
+func newFileInfoFromOS(fi os.FileInfo, setTime bool, replaceName string) FileInfo {
 	var name string
 	if replaceName == "" {
 		name = fi.Name()
@@ -42,13 +42,13 @@ func NewFileInfoFromOS(fi os.FileInfo, setTime bool, replaceName string) FileInf
 	}
 
 	if fi.IsDir() {
-		return NewDirInfo(name, mode, modTime, accessTime)
+		return newDirInfo(name, mode, modTime, accessTime)
 	} else {
-		return NewFileInfo(name, fi.Size(), mode, modTime, accessTime)
+		return newFileInfo(name, fi.Size(), mode, modTime, accessTime)
 	}
 }
 
-func NewFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
+func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
 	return FileInfo{
 		name:    name,
 		size:    size,
@@ -58,7 +58,7 @@ func NewFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime 
 	}
 }
 
-func NewDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
+func newDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) FileInfo {
 	return FileInfo{
 		name:    name,
 		mode:    mode,

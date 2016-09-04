@@ -15,7 +15,7 @@ func CopyFromReaderToRemote(client *ssh.Client, info FileInfo, r io.ReadCloser, 
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
 	if info.name != destFilename {
-		info = NewFileInfo(destFilename, info.Size(), info.Mode(), info.ModTime(), info.AccessTime())
+		info = newFileInfo(destFilename, info.Size(), info.Mode(), info.ModTime(), info.AccessTime())
 	}
 
 	return runSourceSession(client, destDir, true, "", false, true, func(s *sourceSession) error {
@@ -39,7 +39,7 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) 
 		if err != nil {
 			return fmt.Errorf("failed to stat source file: err=%s", err)
 		}
-		fi := NewFileInfoFromOS(osFileInfo, true, destFilename)
+		fi := newFileInfoFromOS(osFileInfo, true, destFilename)
 
 		file, err := os.Open(localFilename)
 		if err != nil {
@@ -111,7 +111,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptF
 				return err
 			}
 
-			scpFileInfo := NewFileInfoFromOS(info, true, path)
+			scpFileInfo := newFileInfoFromOS(info, true, path)
 			accepted, err := acceptFn(scpFileInfo)
 			if err != nil {
 				return err
@@ -125,7 +125,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptF
 			}()
 
 			for _, newDir := range newDirs {
-				fi := NewFileInfoFromOS(info, true, newDir)
+				fi := newFileInfoFromOS(info, true, newDir)
 				err := s.StartDirectory(fi)
 				if err != nil {
 					return err
@@ -133,7 +133,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptF
 			}
 
 			if !isDir && accepted {
-				fi := NewFileInfoFromOS(info, true, "")
+				fi := newFileInfoFromOS(info, true, "")
 				file, err := os.Open(path)
 				if err != nil {
 					return err
