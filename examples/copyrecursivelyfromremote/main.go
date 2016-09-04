@@ -5,7 +5,7 @@ import (
 	"net"
 	"os"
 
-	"bitbucket.org/hnakamur/scp"
+	"github.com/hnakamur/scp"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"bitbucket.org/hnakamur/scp"
+	"github.com/hnakamur/scp"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -42,7 +42,7 @@ func run() error {
 		return err
 	}
 
-	srcDir := filepath.Join(os.Getenv("HOME"), "gocode", "src", "bitbucket.org", "hnakamur", "scp")
+	srcDir := filepath.Join(os.Getenv("HOME"), "gocode", "src", "github.com", "hnakamur", "scp")
 	return scp.CopyRecursivelyToRemote(client, srcDir, destDir, nil)
 	//return scp.CopyRecursivelyToRemote(client, srcDir, destDir, func(dir string, info os.FileInfo) (bool, error) {
 	//	return dir != srcDir || info.Name() != ".git", nil
