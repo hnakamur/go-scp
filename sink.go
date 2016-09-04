@@ -12,73 +12,64 @@ import (
 )
 
 func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.Writer) (*FileInfo, error) {
-	s, err := NewSinkSession(client, remoteFilename, false, "", false, true)
-	defer s.Close()
-	if err != nil {
-		return nil, err
-	}
+	var info *FileInfo
+	err := RunSinkSession(client, remoteFilename, false, "", false, true, func(s *SinkSession) error {
+		var timeHeader TimeMsgHeader
+		h, err := s.ReadHeaderOrReply()
+		if err != nil {
+			return fmt.Errorf("failed to read scp message header: err=%s", err)
+		}
+		var ok bool
+		timeHeader, ok = h.(TimeMsgHeader)
+		if !ok {
+			return fmt.Errorf("expected time message header, got %+v", h)
+		}
 
-	var timeHeader TimeMsgHeader
-	h, err := s.ReadHeaderOrReply()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read scp message header: err=%s", err)
-	}
-	var ok bool
-	timeHeader, ok = h.(TimeMsgHeader)
-	if !ok {
-		return nil, fmt.Errorf("expected time message header, got %+v", h)
-	}
+		h, err = s.ReadHeaderOrReply()
+		if err != nil {
+			return fmt.Errorf("failed to read scp message header: err=%s", err)
+		}
+		fileHeader, ok := h.(FileMsgHeader)
+		if !ok {
+			return fmt.Errorf("expected file message header, got %+v", h)
+		}
+		err = s.CopyFileBodyTo(fileHeader, dest)
+		if err != nil {
+			return fmt.Errorf("failed to copy file: err=%s", err)
+		}
 
-	h, err = s.ReadHeaderOrReply()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read scp message header: err=%s", err)
-	}
-	fileHeader, ok := h.(FileMsgHeader)
-	if !ok {
-		return nil, fmt.Errorf("expected file message header, got %+v", h)
-	}
-	err = s.CopyFileBodyTo(fileHeader, dest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to copy file: err=%s", err)
-	}
-
-	info := NewFileInfo(remoteFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
-	return &info, s.Wait()
+		tmpInfo := NewFileInfo(remoteFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+		info = &tmpInfo
+		return nil
+	})
+	return info, err
 }
 
 func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	localFilename = filepath.Clean(localFilename)
 
-	s, err := NewSinkSession(client, remoteFilename, false, "", false, true)
-	defer s.Close()
-	if err != nil {
-		return err
-	}
+	return RunSinkSession(client, remoteFilename, false, "", false, true, func(s *SinkSession) error {
+		h, err := s.ReadHeaderOrReply()
+		if err != nil {
+			return fmt.Errorf("failed to read scp message header: err=%s", err)
+		}
+		timeHeader, ok := h.(TimeMsgHeader)
+		if !ok {
+			return fmt.Errorf("expected time message header, got %+v", h)
+		}
 
-	h, err := s.ReadHeaderOrReply()
-	if err != nil {
-		return fmt.Errorf("failed to read scp message header: err=%s", err)
-	}
-	timeHeader, ok := h.(TimeMsgHeader)
-	if !ok {
-		return fmt.Errorf("expected time message header, got %+v", h)
-	}
+		h, err = s.ReadHeaderOrReply()
+		if err != nil {
+			return fmt.Errorf("failed to read scp message header: err=%s", err)
+		}
+		fileHeader, ok := h.(FileMsgHeader)
+		if !ok {
+			return fmt.Errorf("expected file message header, got %+v", h)
+		}
 
-	h, err = s.ReadHeaderOrReply()
-	if err != nil {
-		return fmt.Errorf("failed to read scp message header: err=%s", err)
-	}
-	fileHeader, ok := h.(FileMsgHeader)
-	if !ok {
-		return fmt.Errorf("expected file message header, got %+v", h)
-	}
-
-	err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
-	if err != nil {
-		return err
-	}
-	return s.Wait()
+		return copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
+	})
 }
 
 func copyFileBodyFromRemote(s *SinkSession, localFilename string, timeHeader TimeMsgHeader, fileHeader FileMsgHeader, updatesPermission, setTime bool) error {
@@ -119,114 +110,110 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 		acceptFn = acceptAny
 	}
 
-	s, err := NewSinkSession(client, srcDir, true, "", true, true)
-	defer s.Close()
-	if err != nil {
-		return err
-	}
-
-	curDir := destDir
-	var timeHeader TimeMsgHeader
-	var timeHeaders []TimeMsgHeader
-	isFirstStartDirectory := true
-	var skipBaseDir string
-	for {
-		h, err := s.ReadHeaderOrReply()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("failed to read scp message header: err=%s", err)
-		}
-		switch h.(type) {
-		case TimeMsgHeader:
-			timeHeader = h.(TimeMsgHeader)
-		case StartDirectoryMsgHeader:
-			if isFirstStartDirectory {
-				isFirstStartDirectory = false
-				continue
+	return RunSinkSession(client, srcDir, true, "", true, true, func(s *SinkSession) error {
+		curDir := destDir
+		var timeHeader TimeMsgHeader
+		var timeHeaders []TimeMsgHeader
+		isFirstStartDirectory := true
+		var skipBaseDir string
+		for {
+			h, err := s.ReadHeaderOrReply()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("failed to read scp message header: err=%s", err)
 			}
-
-			dirHeader := h.(StartDirectoryMsgHeader)
-			curDir = filepath.Join(curDir, dirHeader.Name)
-			timeHeaders = append(timeHeaders, timeHeader)
-
-			if skipBaseDir != "" {
-				continue
-			}
-
-			info := NewDirInfo(curDir, dirHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
-			accepted, err := acceptFn(info)
-			if err != nil {
-				return fmt.Errorf("error from accessFn: err=%s", err)
-			}
-			if !accepted {
-				skipBaseDir = curDir
-				continue
-			}
-
-			err = os.MkdirAll(curDir, dirHeader.Mode)
-			if err != nil {
-				return fmt.Errorf("failed to create directory: err=%s", err)
-			}
-
-			err = os.Chmod(curDir, dirHeader.Mode)
-			if err != nil {
-				return fmt.Errorf("failed to change directory mode: err=%s", err)
-			}
-		case EndDirectoryMsgHeader:
-			if len(timeHeaders) > 0 {
-				timeHeader = timeHeaders[len(timeHeaders)-1]
-				timeHeaders = timeHeaders[:len(timeHeaders)-1]
-				if skipBaseDir == "" {
-					err := os.Chtimes(curDir, timeHeader.Atime, timeHeader.Mtime)
-					if err != nil {
-						return fmt.Errorf("failed to change directory time: err=%s", err)
-					}
+			switch h.(type) {
+			case TimeMsgHeader:
+				timeHeader = h.(TimeMsgHeader)
+			case StartDirectoryMsgHeader:
+				if isFirstStartDirectory {
+					isFirstStartDirectory = false
+					continue
 				}
-			}
-			curDir = filepath.Dir(curDir)
-			if skipBaseDir != "" {
-				var sub bool
-				if curDir == "" {
-					sub = true
-				} else {
-					var err error
-					sub, err = isSubdirectory(skipBaseDir, curDir)
-					if err != nil {
-						return fmt.Errorf("failed to check directory is subdirectory: err=%s", err)
-					}
+
+				dirHeader := h.(StartDirectoryMsgHeader)
+				curDir = filepath.Join(curDir, dirHeader.Name)
+				timeHeaders = append(timeHeaders, timeHeader)
+
+				if skipBaseDir != "" {
+					continue
 				}
-				if !sub {
-					skipBaseDir = ""
-				}
-			}
-		case FileMsgHeader:
-			fileHeader := h.(FileMsgHeader)
-			localFilename := filepath.Join(curDir, fileHeader.Name)
-			if skipBaseDir == "" {
-				info := NewFileInfo(localFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+
+				info := NewDirInfo(curDir, dirHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
 				accepted, err := acceptFn(info)
 				if err != nil {
 					return fmt.Errorf("error from accessFn: err=%s", err)
 				}
 				if !accepted {
+					skipBaseDir = curDir
 					continue
 				}
-				err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
+
+				err = os.MkdirAll(curDir, dirHeader.Mode)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to create directory: err=%s", err)
 				}
-			} else {
-				err = s.CopyFileBodyTo(fileHeader, ioutil.Discard)
+
+				err = os.Chmod(curDir, dirHeader.Mode)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to change directory mode: err=%s", err)
 				}
+			case EndDirectoryMsgHeader:
+				if len(timeHeaders) > 0 {
+					timeHeader = timeHeaders[len(timeHeaders)-1]
+					timeHeaders = timeHeaders[:len(timeHeaders)-1]
+					if skipBaseDir == "" {
+						err := os.Chtimes(curDir, timeHeader.Atime, timeHeader.Mtime)
+						if err != nil {
+							return fmt.Errorf("failed to change directory time: err=%s", err)
+						}
+					}
+				}
+				curDir = filepath.Dir(curDir)
+				if skipBaseDir != "" {
+					var sub bool
+					if curDir == "" {
+						sub = true
+					} else {
+						var err error
+						sub, err = isSubdirectory(skipBaseDir, curDir)
+						if err != nil {
+							return fmt.Errorf("failed to check directory is subdirectory: err=%s", err)
+						}
+					}
+					if !sub {
+						skipBaseDir = ""
+					}
+				}
+			case FileMsgHeader:
+				fileHeader := h.(FileMsgHeader)
+				localFilename := filepath.Join(curDir, fileHeader.Name)
+				if skipBaseDir == "" {
+					info := NewFileInfo(localFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+					accepted, err := acceptFn(info)
+					if err != nil {
+						return fmt.Errorf("error from accessFn: err=%s", err)
+					}
+					if !accepted {
+						continue
+					}
+					err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader, true, true)
+					if err != nil {
+						return err
+					}
+				} else {
+					err = s.CopyFileBodyTo(fileHeader, ioutil.Discard)
+					if err != nil {
+						return err
+					}
+				}
+			case OKMsg:
+				// do nothing
 			}
-		case OKMsg:
-			// do nothing
 		}
-	}
-	return s.Wait()
+		return nil
+	})
 }
 
 func isSubdirectory(basepath, targetpath string) (bool, error) {
@@ -313,4 +300,19 @@ func (s *SinkSession) Wait() error {
 		return nil
 	}
 	return s.session.Wait()
+}
+
+func RunSinkSession(client *ssh.Client, remoteSrcPath string, remoteSrcIsDir bool, scpPath string, recursive, updatesPermission bool, handler func(s *SinkSession) error) error {
+	s, err := NewSinkSession(client, remoteSrcPath, remoteSrcIsDir, scpPath, recursive, updatesPermission)
+	defer s.Close()
+	if err != nil {
+		return err
+	}
+
+	err = handler(s)
+	if err != nil {
+		return err
+	}
+
+	return s.Wait()
 }

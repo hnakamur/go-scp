@@ -18,24 +18,13 @@ func CopyFromReaderToRemote(client *ssh.Client, info FileInfo, r io.ReadCloser, 
 		info = NewFileInfo(destFilename, info.Size(), info.Mode(), info.ModTime(), info.AccessTime())
 	}
 
-	s, err := NewSourceSession(client, destDir, true, "", false, true)
-	defer s.Close()
-	if err != nil {
-		return err
-	}
-	err = func() error {
-		defer s.CloseStdin()
-
-		err = s.WriteFile(info, r)
+	return RunSourceSession(client, destDir, true, "", false, true, func(s *SourceSession) error {
+		err := s.WriteFile(info, r)
 		if err != nil {
 			return fmt.Errorf("failed to copy file: err=%s", err)
 		}
 		return nil
-	}()
-	if err != nil {
-		return err
-	}
-	return s.Wait()
+	})
 }
 
 func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) error {
@@ -45,14 +34,7 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) 
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
 
-	s, err := NewSourceSession(client, destDir, true, "", false, true)
-	defer s.Close()
-	if err != nil {
-		return err
-	}
-	err = func() error {
-		defer s.CloseStdin()
-
+	return RunSourceSession(client, destDir, true, "", false, true, func(s *SourceSession) error {
 		osFileInfo, err := os.Stat(localFilename)
 		if err != nil {
 			return fmt.Errorf("failed to stat source file: err=%s", err)
@@ -69,11 +51,7 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) 
 			return fmt.Errorf("failed to copy file: err=%s", err)
 		}
 		return nil
-	}()
-	if err != nil {
-		return err
-	}
-	return s.Wait()
+	})
 }
 
 type AcceptFunc func(info FileInfo) (bool, error)
@@ -89,14 +67,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptF
 		acceptFn = acceptAny
 	}
 
-	s, err := NewSourceSession(client, destDir, true, "", true, true)
-	defer s.Close()
-	if err != nil {
-		return err
-	}
-	err = func() error {
-		defer s.CloseStdin()
-
+	return RunSourceSession(client, destDir, true, "", true, true, func(s *SourceSession) error {
 		endDirectories := func(prevDir, dir string) ([]string, error) {
 			rel, err := filepath.Rel(prevDir, dir)
 			if err != nil {
@@ -174,7 +145,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptF
 			}
 			return nil
 		}
-		err = filepath.Walk(srcDir, myWalkFn)
+		err := filepath.Walk(srcDir, myWalkFn)
 		if err != nil {
 			return err
 		}
@@ -184,11 +155,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptF
 			return err
 		}
 		return nil
-	}()
-	if err != nil {
-		return err
-	}
-	return s.Wait()
+	})
 }
 
 type SourceSession struct {
@@ -274,4 +241,21 @@ func (s *SourceSession) CloseStdin() error {
 		return nil
 	}
 	return s.stdin.Close()
+}
+
+func RunSourceSession(client *ssh.Client, remoteDestPath string, remoteDestIsDir bool, scpPath string, recursive, updatesPermission bool, handler func(s *SourceSession) error) error {
+	s, err := NewSourceSession(client, remoteDestPath, remoteDestIsDir, scpPath, recursive, updatesPermission)
+	defer s.Close()
+	if err != nil {
+		return err
+	}
+	err = func() error {
+		defer s.CloseStdin()
+
+		return handler(s)
+	}()
+	if err != nil {
+		return err
+	}
+	return s.Wait()
 }
