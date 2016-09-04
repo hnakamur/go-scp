@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 
 	"bitbucket.org/hnakamur/scp"
 
@@ -43,9 +42,9 @@ func run() error {
 	}
 
 	srcDir := "/tmp/hoge"
-	acceptFn := func(info os.FileInfo) (bool, error) {
-		accepted := info.Name() != filepath.Join(destDir, ".git")
-		fmt.Printf("acceptFn info=%+v, accepted=%v\n", info, accepted)
+	acceptFn := func(dir string, info os.FileInfo) (bool, error) {
+		accepted := dir != destDir || info.Name() != ".git"
+		fmt.Printf("acceptFn dir=%s, info=%+v, accepted=%v\n", dir, info, accepted)
 		return accepted, nil
 	}
 	return scp.CopyRecursivelyFromRemote(client, srcDir, destDir, acceptFn)

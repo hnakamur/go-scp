@@ -135,8 +135,8 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 					continue
 				}
 
-				info := newDirInfo(curDir, dirHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
-				accepted, err := acceptFn(info)
+				info := newDirInfo(dirHeader.Name, dirHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+				accepted, err := acceptFn(filepath.Dir(curDir), info)
 				if err != nil {
 					return fmt.Errorf("error from accessFn: err=%s", err)
 				}
@@ -183,16 +183,16 @@ func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, accep
 				}
 			case fileMsgHeader:
 				fileHeader := h.(fileMsgHeader)
-				localFilename := filepath.Join(curDir, fileHeader.Name)
 				if skipBaseDir == "" {
-					info := newFileInfo(localFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
-					accepted, err := acceptFn(info)
+					info := newFileInfo(fileHeader.Name, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+					accepted, err := acceptFn(curDir, info)
 					if err != nil {
 						return fmt.Errorf("error from accessFn: err=%s", err)
 					}
 					if !accepted {
 						continue
 					}
+					localFilename := filepath.Join(curDir, fileHeader.Name)
 					err = copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader)
 					if err != nil {
 						return err

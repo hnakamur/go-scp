@@ -2,6 +2,7 @@ package scp
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -39,7 +40,7 @@ func newFileInfoFromOS(fi os.FileInfo, replaceName string) *FileInfo {
 
 func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime time.Time) *FileInfo {
 	return &FileInfo{
-		name:       name,
+		name:       filepath.Base(name),
 		size:       size,
 		mode:       mode & os.ModePerm,
 		modTime:    modTime,
@@ -49,7 +50,7 @@ func newFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime 
 
 func newDirInfo(name string, mode os.FileMode, modTime, accessTime time.Time) *FileInfo {
 	return &FileInfo{
-		name:       name,
+		name:       filepath.Base(name),
 		mode:       (mode & os.ModePerm) | os.ModeDir,
 		modTime:    modTime,
 		accessTime: accessTime,

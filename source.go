@@ -54,9 +54,9 @@ func CopyFileToRemote(client *ssh.Client, localFilename, remoteFilename string) 
 	})
 }
 
-type AcceptFunc func(info os.FileInfo) (bool, error)
+type AcceptFunc func(dir string, info os.FileInfo) (bool, error)
 
-func acceptAny(info os.FileInfo) (bool, error) {
+func acceptAny(dir string, info os.FileInfo) (bool, error) {
 	return true, nil
 }
 
@@ -112,7 +112,7 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptF
 			}
 
 			scpFileInfo := newFileInfoFromOS(info, path)
-			accepted, err := acceptFn(scpFileInfo)
+			accepted, err := acceptFn(filepath.Dir(path), scpFileInfo)
 			if err != nil {
 				return err
 			}
