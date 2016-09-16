@@ -49,7 +49,7 @@ func TestCopyFileFromRemote(t *testing.T) {
 		if err != nil {
 			t.Errorf("fail to CopyFileFromRemote; %s", err)
 		}
-		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName, false)
+		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName)
 	})
 
 	t.Run("Empty file", func(t *testing.T) {
@@ -66,6 +66,6 @@ func TestCopyFileFromRemote(t *testing.T) {
 		if err != nil {
 			t.Errorf("fail to CopyFileFromRemote; %s", err)
 		}
-		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName, false)
+		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName)
 	})
 }

@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -22,13 +23,13 @@ import (
 )
 
 func TestCopyFileToRemote(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-test-local")
+	localDir, err := ioutil.TempDir("", "go-scp-TestCopyFileToRemote-local")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
 	defer os.RemoveAll(localDir)
 
-	remoteDir, err := ioutil.TempDir("", "go-scp-test-remote")
+	remoteDir, err := ioutil.TempDir("", "go-scp-TestCopyFileToRemote-remote")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
@@ -61,7 +62,7 @@ func TestCopyFileToRemote(t *testing.T) {
 		if err != nil {
 			t.Errorf("fail to CopyFileToRemote; %s", err)
 		}
-		sameFileInfoAndContent(t, remoteDir, localDir, remoteName, localName, false)
+		sameFileInfoAndContent(t, remoteDir, localDir, remoteName, localName)
 	})
 
 	t.Run("Empty file", func(t *testing.T) {
@@ -78,12 +79,63 @@ func TestCopyFileToRemote(t *testing.T) {
 		if err != nil {
 			t.Errorf("fail to CopyFileToRemote; %s", err)
 		}
-		sameFileInfoAndContent(t, remoteDir, localDir, remoteName, localName, false)
+		sameFileInfoAndContent(t, remoteDir, localDir, remoteName, localName)
+	})
+}
+
+func TestCopyRecursivelyToRemote(t *testing.T) {
+	localDir, err := ioutil.TempDir("", "go-scp-TestCopyRecursivelyToRemote-local")
+	if err != nil {
+		t.Fatalf("fail to get tempdir; %s", err)
+	}
+	defer os.RemoveAll(localDir)
+
+	remoteDir, err := ioutil.TempDir("", "go-scp-TestCopyRecursivelyToRemote-remote")
+	if err != nil {
+		t.Fatalf("fail to get tempdir; %s", err)
+	}
+	defer os.RemoveAll(remoteDir)
+
+	s, l, err := newTestSshdServer(remoteDir)
+	if err != nil {
+		t.Fatalf("fail to create test sshd server; %s", err)
+	}
+	defer s.Close()
+	go s.Serve(l)
+
+	c, err := newTestSshClient(l.Addr().String())
+	if err != nil {
+		t.Fatalf("fail to serve test sshd server; %s", err)
+	}
+	defer c.Close()
+
+	t.Run("copy all case 1", func(t *testing.T) {
+		entries := []fileInfo{
+			{name: "foo", maxSize: testMaxFileSize, mode: 0644},
+			{name: "bar", maxSize: testMaxFileSize, mode: 0600},
+			{name: "baz", isDir: true, mode: 0755,
+				entries: []fileInfo{
+					{name: "foo", maxSize: testMaxFileSize, mode: 0400},
+					{name: "hoge", maxSize: testMaxFileSize, mode: 0602},
+					{name: "emptyDir", isDir: true, mode: 0500},
+				},
+			},
+		}
+		err := generateRandomFiles(localDir, entries)
+		if err != nil {
+			t.Fatalf("fail to generate local files; %s", err)
+		}
+
+		err = scp.CopyRecursivelyToRemote(c, localDir, remoteDir, nil)
+		if err != nil {
+			t.Errorf("fail to CopyRecursivelyToRemote; %s", err)
+		}
+		sameDirTreeContent(t, localDir, remoteDir)
 	})
 }
 
 var (
-	testMaxFileSize  = big.NewInt(1024 * 1024)
+	testMaxFileSize  = int64(1024 * 1024)
 	testSshdUser     = "user1"
 	testSshdPassword = "password1"
 	testSshdShell    = "sh"
@@ -140,17 +192,58 @@ func newTestSshClient(addr string) (*ssh.Client, error) {
 	return ssh.Dial("tcp", addr, config)
 }
 
+type fileInfo struct {
+	name    string
+	isDir   bool
+	mode    os.FileMode
+	maxSize int64
+	entries []fileInfo
+}
+
+func generateRandomFiles(dir string, entries []fileInfo) error {
+	for _, entry := range entries {
+		if filepath.Base(entry.name) != entry.name {
+			return fmt.Errorf("fileInfo name must not contain path separator; %s", entry.name)
+		}
+		path := filepath.Join(dir, entry.name)
+		if entry.isDir {
+			err := os.MkdirAll(path, entry.mode)
+			if err != nil {
+				return err
+			}
+			err = generateRandomFiles(path, entry.entries)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := generateRandomFileWithMaxSizeAndMode(path, entry.maxSize, entry.mode)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func generateRandomFile(filename string) error {
-	size, err := generateRandomFileSize()
+	return generateRandomFileWithMaxSizeAndMode(filename, testMaxFileSize, 0644)
+}
+
+func generateRandomFileWithMaxSizeAndMode(filename string, maxSize int64, mode os.FileMode) error {
+	size, err := generateRandomFileSize(maxSize)
 	if err != nil {
 		return err
 	}
 
-	return generateRandomFileWithSize(filename, size)
+	return generateRandomFileWithSizeAndMode(filename, size, mode)
 }
 
 func generateRandomFileWithSize(filename string, size int64) error {
-	file, err := os.Create(filename)
+	return generateRandomFileWithSizeAndMode(filename, size, 0666)
+}
+
+func generateRandomFileWithSizeAndMode(filename string, size int64, mode os.FileMode) error {
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
@@ -161,15 +254,72 @@ func generateRandomFileWithSize(filename string, size int64) error {
 	return err
 }
 
-func generateRandomFileSize() (int64, error) {
-	n, err := rand.Int(rand.Reader, testMaxFileSize)
+func generateRandomFileSize(maxSize int64) (int64, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(maxSize))
 	if err != nil {
 		return 0, err
 	}
 	return n.Int64(), nil
 }
 
-func sameFileInfoAndContent(t *testing.T, gotDir, wantDir, gotFilename, wantFilename string, compareName bool) bool {
+func sameDirTreeContent(t *testing.T, gotDir, wantDir string) bool {
+	gotNames, err := filepath.Glob(filepath.Join(gotDir, "*"))
+	if err != nil {
+		t.Fatalf("failed to glob under dir %s; %s", gotDir, err)
+	}
+	wantNames, err := filepath.Glob(filepath.Join(wantDir, "*"))
+	if err != nil {
+		t.Fatalf("failed to glob under dir %s; %s", wantDir, err)
+	}
+	if len(gotNames) != len(wantNames) {
+		t.Errorf("unmatch entry count. got:%d, want:%d", len(gotNames), len(wantNames))
+		return false
+	}
+	sort.Strings(gotNames)
+	sort.Strings(wantNames)
+	for i := 0; i < len(gotNames); i++ {
+		gotName := filepath.Base(gotNames[i])
+		wantName := filepath.Base(wantNames[i])
+		gotPath := filepath.Join(gotDir, gotName)
+		wantPath := filepath.Join(wantDir, wantName)
+		gotFileInfo, err := os.Stat(gotPath)
+		if err != nil {
+			t.Fatalf("cannot stat file; %s", err)
+			return false
+		}
+		wantFileInfo, err := os.Stat(wantPath)
+		if err != nil {
+			t.Fatalf("cannot stat file; %s", err)
+			return false
+		}
+
+		same := sameDirOrFile(t, gotDir, wantDir, gotFileInfo, wantFileInfo)
+		if !same {
+			return false
+		}
+
+		if gotFileInfo.IsDir() {
+			same = sameDirTreeContent(t, filepath.Join(gotDir, gotName), filepath.Join(wantDir, wantName))
+			if !same {
+				return false
+			}
+		}
+	}
+
+	return false
+}
+
+func sameDirOrFile(t *testing.T, gotDir, wantDir string, gotFileInfo, wantFileInfo os.FileInfo) bool {
+	if !sameFileInfo(t, gotDir, wantDir, gotFileInfo, wantFileInfo) {
+		return false
+	}
+	if gotFileInfo.IsDir() {
+		return true
+	}
+	return sameFileContent(t, gotDir, wantDir, gotFileInfo.Name(), wantFileInfo.Name())
+}
+
+func sameFileInfoAndContent(t *testing.T, gotDir, wantDir, gotFilename, wantFilename string) bool {
 	wantPath := filepath.Join(wantDir, wantFilename)
 	wantFileInfo, err := os.Stat(wantPath)
 	if err != nil {
@@ -180,32 +330,28 @@ func sameFileInfoAndContent(t *testing.T, gotDir, wantDir, gotFilename, wantFile
 	if err != nil {
 		t.Fatalf("fail to stat file %s; %s", gotPath, err)
 	}
-	return sameFileInfo(t, gotDir, wantDir, gotFileInfo, wantFileInfo, compareName) &&
+	return sameFileInfo(t, gotDir, wantDir, gotFileInfo, wantFileInfo) &&
 		sameFileContent(t, gotDir, wantDir, gotFilename, wantFilename)
 }
 
-func sameFileInfo(t *testing.T, gotDir, wantDir string, got, want os.FileInfo, compareName bool) bool {
+func sameFileInfo(t *testing.T, gotDir, wantDir string, gotFileInfo, wantFileInfo os.FileInfo) bool {
 	same := true
-	if compareName && got.Name() != want.Name() {
-		t.Errorf("unmatch name. wantDir:%s; got:%s; want:%s", wantDir, got.Name(), want.Name())
+	if gotFileInfo.Size() != wantFileInfo.Size() {
+		t.Errorf("unmatch size. wantDir:%s; gotFileInfo:%d; wantFileInfo:%d", wantDir, gotFileInfo.Size(), wantFileInfo.Size())
 		same = false
 	}
-	if got.Size() != want.Size() {
-		t.Errorf("unmatch size. wantDir:%s; got:%d; want:%d", wantDir, got.Size(), want.Size())
+	if gotFileInfo.Mode() != wantFileInfo.Mode() {
+		t.Errorf("unmatch mode. wantDir:%s; gotFileInfo:%s; wantFileInfo:%s", wantDir, gotFileInfo.Mode(), wantFileInfo.Mode())
 		same = false
 	}
-	if got.Mode() != want.Mode() {
-		t.Errorf("unmatch mode. wantDir:%s; got:%s; want:%s", wantDir, got.Mode(), want.Mode())
-		same = false
-	}
-	gotModTime := got.ModTime().Truncate(time.Second)
-	wantModTime := want.ModTime().Truncate(time.Second)
+	gotModTime := gotFileInfo.ModTime().Truncate(time.Second)
+	wantModTime := wantFileInfo.ModTime().Truncate(time.Second)
 	if gotModTime != wantModTime {
-		t.Errorf("unmatch modification time. wantDir:%s; got:%s; want:%s", wantDir, gotModTime, wantModTime)
+		t.Errorf("unmatch modification time. wantDir:%s; gotFileInfo:%s; wantFileInfo:%s", wantDir, gotModTime, wantModTime)
 		same = false
 	}
-	if got.IsDir() != want.IsDir() {
-		t.Errorf("unmatch isDir. wantDir:%s; got:%v; want:%v", wantDir, got.IsDir(), want.IsDir())
+	if gotFileInfo.IsDir() != wantFileInfo.IsDir() {
+		t.Errorf("unmatch isDir. wantDir:%s; gotFileInfo:%v; wantFileInfo:%v", wantDir, gotFileInfo.IsDir(), wantFileInfo.IsDir())
 		same = false
 	}
 	return same
