@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"net"
 	"os"
 	"path/filepath"
@@ -21,7 +22,13 @@ import (
 )
 
 func TestCopyFileToRemote(t *testing.T) {
-	remoteDir, err := ioutil.TempDir("", "go-scp-test")
+	localDir, err := ioutil.TempDir("", "go-scp-test-local")
+	if err != nil {
+		t.Fatalf("fail to get tempdir; %s", err)
+	}
+	defer os.RemoveAll(localDir)
+
+	remoteDir, err := ioutil.TempDir("", "go-scp-test-remote")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
@@ -40,11 +47,15 @@ func TestCopyFileToRemote(t *testing.T) {
 	}
 	defer c.Close()
 
-	localDir := "."
-	localName := "sink_test.go"
-	remoteName := "dest_file.go"
+	localName := "test1.dat"
+	remoteName := "dest.dat"
 	localPath := filepath.Join(localDir, localName)
 	remotePath := filepath.Join(remoteDir, remoteName)
+	err = generateRandomFile(localPath)
+	if err != nil {
+		t.Fatalf("fail to generate local file; %s", err)
+	}
+
 	err = scp.CopyFileToRemote(c, localPath, remotePath)
 	if err != nil {
 		t.Errorf("fail to CopyFileToRemote; %s", err)
@@ -53,6 +64,7 @@ func TestCopyFileToRemote(t *testing.T) {
 }
 
 var (
+	testMaxFileSize  = big.NewInt(1024 * 1024)
 	testSshdUser     = "user1"
 	testSshdPassword = "password1"
 	testSshdShell    = "sh"
@@ -107,6 +119,30 @@ func newTestSshClient(addr string) (*ssh.Client, error) {
 	}
 
 	return ssh.Dial("tcp", addr, config)
+}
+
+func generateRandomFile(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	size, err := generateRandomFileSize()
+	if err != nil {
+		return err
+	}
+	reader := io.LimitReader(rand.Reader, size)
+	_, err = io.Copy(file, reader)
+	return err
+}
+
+func generateRandomFileSize() (int64, error) {
+	n, err := rand.Int(rand.Reader, testMaxFileSize)
+	if err != nil {
+		return 0, err
+	}
+	return n.Int64(), nil
 }
 
 func sameFileInfoAndContent(t *testing.T, gotDir, wantDir, gotFilename, wantFilename string, compareName bool) bool {
