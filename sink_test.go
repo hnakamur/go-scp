@@ -2,6 +2,10 @@ package scp_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -52,34 +56,6 @@ var (
 	testSshdUser     = "user1"
 	testSshdPassword = "password1"
 	testSshdShell    = "sh"
-	testSshdKey      = `-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEArs5yTtou7fbBsuAUpzoeo1tDqL8eNAaINY3e/1FZuxpOSpw2
-JGx5bFOgpoKErmnpNbP/0XnaqwB0axagyrz9+n9VeK7oUGzYpaLhMD0vuJcMkO19
-cLFkeGy/9IYB+T18tu9U3wM2Y79fFS+2TbLFP8LDmnKbO4l8NL6b2dwgej2NX3jH
-MiFaZBwPd8bjy71gt68klmCXcokzFeus0e9/3cSENlHgKH6pETYsalWS2W2jZT2I
-cpe+rSC9zJScTifJrXUTc106pHcg1/lGoUP0izHu7dDomr1f3l9MqESikR57Wn08
-YmtfW5suNty5qKWQE/DG1R8F+N0suKwndvZEMQIDAQABAoIBAAyYT2AjFFKM/vPW
-dWZ/J4n5n2xfKNvyxImnSTP4NpDmmlGB49zH/A+0DtUwfkLa2rTF3V7IetrrU3gL
-z1YMO/h6iDwDzjVNQmbcz4DcR73zFDK1Cd6+yVBr9YC2zxmYNo4vvFu9LYQOW9l4
-8Je0k8W+UL2mGE034L0kJrKRy71C55rO1QYca+O0Ykmtkn4U5jyPEI2Xj19r6BHJ
-43CjPdIkr80QFnJWhBgJy5j5S740ZBjuC4mdaNUS+9U/cITe4zxYetLTOBZb/BJO
-M1kkGRbwj2SiDyX0l9xs7QzVUjP26DoN91ifIgKx/DYszO+8CVg0Q8uEHUBlbR0/
-dPSFXIECgYEA06snJVHoiXu7GM5tTA1aXkqySckDHSYxOPzdFpLaRWoMkhhLhyDw
-Z8fCF+uP8eotlewefX9NIvUazZ2XXZcJauORY3Tcy6wvKGNLW5ju5848Bwy8jT+G
-sKYij5LGgt8kMlA2c/ULSQTgyIafhCgroDvLKkyoGvWkV1YQb+IKxPkCgYEA02rj
-lh1MHcbcB8o2IJlyEFV/ICkytFzdJ6eI0+nt88o3kbzg92uxCYZJtEb9wX2AVZ1v
-57q/r9w/krSc3VRfUDE8wJ8VCidxlXHYcN6CQILA3bsM/t2q0kuacwpN7OGEhX2+
-Fj9EZ1gjTpWehIRveCBF7Fkxzq9es6CZNlYDnvkCgYAkopfo5q9XtFmipn/WTO1a
-KpWHHcpzLhwQ3/soIAy1PPCmDJxt6+6QF8vpNfU5Cq4PJ8nzMKhaJ5AXDHKZWT3h
-CTgtvZlFiyyyUdVGKkcXSeOr2LF9xQP76RVMQjwnhJWQO7/g/AWTAswhCOPtDMLY
-PeEhFhl2aROjphq8MqRoiQKBgQCezKjJtpPXwei/iSmC7v74Od/U/lzxkNck0/g4
-hHuRJJD8zMyFy8QcjVuLJ8+uqF/e7vSBMIqOw3aU8UjqDlfRWkpxvIwHJn1wbSTQ
-ErHvVscbRUaLoWCPuO33/wNtLC9oPXysJTVyEofinQuGKhu4NTWQQ6bfwmX1smmi
-oJTzsQKBgQCVK54GpR7fbLmA6zIYoqUmLmspipoUBKCeklHRpBdqy7iuJlXwPu7U
-p61z/WNeBWrJC3fyatSWzhpWSDXLSfFkL7kJ+ebFVt8V9KZZjaSfFQNa1hUhk8rf
-aHZHA1fKg5f7iECmHAW+jyaB7iRW1cSwRDs002kApRAqMUZ9IU0/Iw==
------END RSA PRIVATE KEY-----
-`
 )
 
 func newTestSshdServer(dir string) (*sshd.Server, net.Listener, error) {
@@ -91,8 +67,11 @@ func newTestSshdServer(dir string) (*sshd.Server, net.Listener, error) {
 			return nil, fmt.Errorf("password rejected for %q", c.User())
 		},
 	}
-
-	private, err := ssh.ParsePrivateKey([]byte(testSshdKey))
+	testSshdKey, err := generateTestSshdKey()
+	if err != nil {
+		return nil, nil, err
+	}
+	private, err := ssh.ParsePrivateKey(testSshdKey)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -105,6 +84,20 @@ func newTestSshdServer(dir string) (*sshd.Server, net.Listener, error) {
 		return nil, nil, err
 	}
 	return server, l, err
+}
+
+func generateTestSshdKey() ([]byte, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, err
+	}
+	pemdata := pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(key),
+		},
+	)
+	return pemdata, nil
 }
 
 func newTestSshClient(addr string) (*ssh.Client, error) {
