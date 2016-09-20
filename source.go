@@ -108,11 +108,9 @@ func CopyRecursivelyToRemote(client *ssh.Client, srcDir, destDir string, acceptF
 		}
 
 		isSrcDir := true
-		var srcDirInfo os.FileInfo
 		prevDir := srcDir
 		myWalkFn := func(path string, info os.FileInfo, err error) error {
 			if isSrcDir {
-				srcDirInfo = info
 				isSrcDir = false
 			}
 
