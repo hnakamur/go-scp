@@ -22,14 +22,14 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func TestCopyFileToRemote(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-TestCopyFileToRemote-local")
+func TestSendFile(t *testing.T) {
+	localDir, err := ioutil.TempDir("", "go-scp-TestSendFile-local")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
 	defer os.RemoveAll(localDir)
 
-	remoteDir, err := ioutil.TempDir("", "go-scp-TestCopyFileToRemote-remote")
+	remoteDir, err := ioutil.TempDir("", "go-scp-TestSendFile-remote")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
@@ -58,7 +58,7 @@ func TestCopyFileToRemote(t *testing.T) {
 			t.Fatalf("fail to generate local file; %s", err)
 		}
 
-		err = scp.CopyFileToRemote(c, localPath, remotePath)
+		err = scp.SendFile(c, localPath, remotePath)
 		if err != nil {
 			t.Errorf("fail to CopyFileToRemote; %s", err)
 		}
@@ -75,22 +75,22 @@ func TestCopyFileToRemote(t *testing.T) {
 			t.Fatalf("fail to generate local file; %s", err)
 		}
 
-		err = scp.CopyFileToRemote(c, localPath, remotePath)
+		err = scp.SendFile(c, localPath, remotePath)
 		if err != nil {
-			t.Errorf("fail to CopyFileToRemote; %s", err)
+			t.Errorf("fail to SendFile; %s", err)
 		}
 		sameFileInfoAndContent(t, remoteDir, localDir, remoteName, localName)
 	})
 }
 
-func TestCopyRecursivelyToRemote(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-TestCopyRecursivelyToRemote-local")
+func TestSendDir(t *testing.T) {
+	localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
 	defer os.RemoveAll(localDir)
 
-	remoteDir, err := ioutil.TempDir("", "go-scp-TestCopyRecursivelyToRemote-remote")
+	remoteDir, err := ioutil.TempDir("", "go-scp-TestSendDir-remote")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
@@ -126,9 +126,9 @@ func TestCopyRecursivelyToRemote(t *testing.T) {
 			t.Fatalf("fail to generate local files; %s", err)
 		}
 
-		err = scp.CopyRecursivelyToRemote(c, localDir, remoteDir, nil)
+		err = scp.SendDir(c, localDir, remoteDir, nil)
 		if err != nil {
-			t.Errorf("fail to CopyRecursivelyToRemote; %s", err)
+			t.Errorf("fail to SendDir; %s", err)
 		}
 		sameDirTreeContent(t, localDir, remoteDir)
 	})

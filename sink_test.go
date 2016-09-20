@@ -9,14 +9,14 @@ import (
 	scp "github.com/hnakamur/go-scp"
 )
 
-func TestCopyFileFromRemote(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-test-local")
+func TestFetchFile(t *testing.T) {
+	localDir, err := ioutil.TempDir("", "go-scp-TestFetchFile-local")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
 	defer os.RemoveAll(localDir)
 
-	remoteDir, err := ioutil.TempDir("", "go-scp-test-remote")
+	remoteDir, err := ioutil.TempDir("", "go-scp-TestFetchFile-remote")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
@@ -45,9 +45,9 @@ func TestCopyFileFromRemote(t *testing.T) {
 			t.Fatalf("fail to generate remote file; %s", err)
 		}
 
-		err = scp.CopyFileFromRemote(c, remotePath, localPath)
+		err = scp.FetchFile(c, remotePath, localPath)
 		if err != nil {
-			t.Errorf("fail to CopyFileFromRemote; %s", err)
+			t.Errorf("fail to FetchFile; %s", err)
 		}
 		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName)
 	})
@@ -62,22 +62,22 @@ func TestCopyFileFromRemote(t *testing.T) {
 			t.Fatalf("fail to generate remote file; %s", err)
 		}
 
-		err = scp.CopyFileFromRemote(c, remotePath, localPath)
+		err = scp.FetchFile(c, remotePath, localPath)
 		if err != nil {
-			t.Errorf("fail to CopyFileFromRemote; %s", err)
+			t.Errorf("fail to FetchFile; %s", err)
 		}
 		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName)
 	})
 }
 
-func TestCopyRecursivelyFromRemote(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-TestCopyRecursivelyFromRemote-local")
+func TestFetchDir(t *testing.T) {
+	localDir, err := ioutil.TempDir("", "go-scp-TestFetchDir-local")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
 	defer os.RemoveAll(localDir)
 
-	remoteDir, err := ioutil.TempDir("", "go-scp-TestCopyRecursivelyFromRemote-remote")
+	remoteDir, err := ioutil.TempDir("", "go-scp-TestFetchDir-remote")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
@@ -113,9 +113,9 @@ func TestCopyRecursivelyFromRemote(t *testing.T) {
 			t.Fatalf("fail to generate remote files; %s", err)
 		}
 
-		err = scp.CopyRecursivelyFromRemote(c, remoteDir, localDir, nil)
+		err = scp.FetchDir(c, remoteDir, localDir, nil)
 		if err != nil {
-			t.Errorf("fail to CopyRecursivelyFromRemote; %s", err)
+			t.Errorf("fail to FetchDir; %s", err)
 		}
 		sameDirTreeContent(t, remoteDir, localDir)
 	})

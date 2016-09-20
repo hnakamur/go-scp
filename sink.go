@@ -11,10 +11,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// CopyFromRemoteToWriter copies a single remote file to the specified writer
+// Fetch copies a single remote file to the specified writer
 // and returns the file information. The actual type of the file information is
 // scp.FileInfo, and you can get the access time with fileInfo.(*scp.FileInfo).AccessTime().
-func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.Writer) (os.FileInfo, error) {
+func Fetch(client *ssh.Client, remoteFilename string, dest io.Writer) (os.FileInfo, error) {
 	var info os.FileInfo
 	err := runSinkSession(client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
@@ -47,10 +47,10 @@ func CopyFromRemoteToWriter(client *ssh.Client, remoteFilename string, dest io.W
 	return info, err
 }
 
-// CopyFileFromRemote copies a single remote file to the local machine with
+// FetchFile copies a single remote file to the local machine with
 // the specified name. The time and permission will be set to the same value
 // of the source file.
-func CopyFileFromRemote(client *ssh.Client, remoteFilename, localFilename string) error {
+func FetchFile(client *ssh.Client, remoteFilename, localFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	localFilename = filepath.Clean(localFilename)
 
@@ -103,12 +103,12 @@ func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader tim
 	return nil
 }
 
-// CopyRecursivelyFromRemote copies files and directories under a remote srcDir to
+// FetchDir copies files and directories under a remote srcDir to
 // to the destDir on the local machine. You can filter the files and directories
 // to be copied with acceptFn. If acceptFn is nil, all files and directories will
 // be copied. The time and permission will be set to the same value of the source
 // file or directory.
-func CopyRecursivelyFromRemote(client *ssh.Client, srcDir, destDir string, acceptFn AcceptFunc) error {
+func FetchDir(client *ssh.Client, srcDir, destDir string, acceptFn AcceptFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
 
