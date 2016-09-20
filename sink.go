@@ -14,9 +14,9 @@ import (
 // Fetch copies a single remote file to the specified writer
 // and returns the file information. The actual type of the file information is
 // scp.FileInfo, and you can get the access time with fileInfo.(*scp.FileInfo).AccessTime().
-func Fetch(client *ssh.Client, remoteFilename string, dest io.Writer) (os.FileInfo, error) {
+func (s *SCP) Fetch(remoteFilename string, dest io.Writer) (os.FileInfo, error) {
 	var info os.FileInfo
-	err := runSinkSession(client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
+	err := runSinkSession(s.client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
@@ -50,11 +50,11 @@ func Fetch(client *ssh.Client, remoteFilename string, dest io.Writer) (os.FileIn
 // FetchFile copies a single remote file to the local machine with
 // the specified name. The time and permission will be set to the same value
 // of the source file.
-func FetchFile(client *ssh.Client, remoteFilename, localFilename string) error {
+func (s *SCP) FetchFile(remoteFilename, localFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	localFilename = filepath.Clean(localFilename)
 
-	return runSinkSession(client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
+	return runSinkSession(s.client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
 			return fmt.Errorf("failed to read scp message header: err=%s", err)
@@ -108,7 +108,7 @@ func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader tim
 // to be copied with acceptFn. If acceptFn is nil, all files and directories will
 // be copied. The time and permission will be set to the same value of the source
 // file or directory.
-func FetchDir(client *ssh.Client, srcDir, destDir string, acceptFn AcceptFunc) error {
+func (s *SCP) FetchDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
 
@@ -116,7 +116,7 @@ func FetchDir(client *ssh.Client, srcDir, destDir string, acceptFn AcceptFunc) e
 		acceptFn = acceptAny
 	}
 
-	return runSinkSession(client, srcDir, true, "", true, true, func(s *sinkSession) error {
+	return runSinkSession(s.client, srcDir, true, "", true, true, func(s *sinkSession) error {
 		curDir := destDir
 		var timeHeader timeMsgHeader
 		var timeHeaders []timeMsgHeader

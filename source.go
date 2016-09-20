@@ -15,7 +15,7 @@ import (
 // The time and permission will be set with the value of info.
 // The r will be closed after copying. If you don't want for r to be
 // closed, you can pass the result of ioutil.NopCloser(r).
-func Send(client *ssh.Client, info *FileInfo, r io.ReadCloser, remoteFilename string) error {
+func (s *SCP) Send(info *FileInfo, r io.ReadCloser, remoteFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
@@ -23,7 +23,7 @@ func Send(client *ssh.Client, info *FileInfo, r io.ReadCloser, remoteFilename st
 		info = NewFileInfo(destFilename, info.size, info.mode, info.modTime, info.accessTime)
 	}
 
-	return runSourceSession(client, destDir, true, "", false, true, func(s *sourceSession) error {
+	return runSourceSession(s.client, destDir, true, "", false, true, func(s *sourceSession) error {
 		err := s.WriteFile(info, r)
 		if err != nil {
 			return fmt.Errorf("failed to copy file: err=%s", err)
@@ -34,14 +34,14 @@ func Send(client *ssh.Client, info *FileInfo, r io.ReadCloser, remoteFilename st
 
 // SendFile copies a single local file to the remote server.
 // The time and permission will be set with the value of the source file.
-func SendFile(client *ssh.Client, localFilename, remoteFilename string) error {
+func (s *SCP) SendFile(localFilename, remoteFilename string) error {
 	localFilename = filepath.Clean(localFilename)
 	remoteFilename = filepath.Clean(remoteFilename)
 
 	destDir := filepath.Dir(remoteFilename)
 	destFilename := filepath.Base(remoteFilename)
 
-	return runSourceSession(client, destDir, true, "", false, true, func(s *sourceSession) error {
+	return runSourceSession(s.client, destDir, true, "", false, true, func(s *sourceSession) error {
 		osFileInfo, err := os.Stat(localFilename)
 		if err != nil {
 			return fmt.Errorf("failed to stat source file: err=%s", err)
@@ -78,14 +78,14 @@ func acceptAny(parentDir string, info os.FileInfo) (bool, error) {
 // it is better to use another method like the tar command.
 // If acceptFn is nil, all files and directories will be copied.
 // The time and permission will be set to the same value of the source file or directory.
-func SendDir(client *ssh.Client, srcDir, destDir string, acceptFn AcceptFunc) error {
+func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
 	if acceptFn == nil {
 		acceptFn = acceptAny
 	}
 
-	return runSourceSession(client, destDir, true, "", true, true, func(s *sourceSession) error {
+	return runSourceSession(s.client, destDir, true, "", true, true, func(s *sourceSession) error {
 		endDirectories := func(prevDir, dir string) ([]string, error) {
 			rel, err := filepath.Rel(prevDir, dir)
 			if err != nil {

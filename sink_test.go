@@ -45,7 +45,7 @@ func TestFetchFile(t *testing.T) {
 			t.Fatalf("fail to generate remote file; %s", err)
 		}
 
-		err = scp.FetchFile(c, remotePath, localPath)
+		err = scp.NewSCP(c).FetchFile(remotePath, localPath)
 		if err != nil {
 			t.Errorf("fail to FetchFile; %s", err)
 		}
@@ -62,7 +62,7 @@ func TestFetchFile(t *testing.T) {
 			t.Fatalf("fail to generate remote file; %s", err)
 		}
 
-		err = scp.FetchFile(c, remotePath, localPath)
+		err = scp.NewSCP(c).FetchFile(remotePath, localPath)
 		if err != nil {
 			t.Errorf("fail to FetchFile; %s", err)
 		}
@@ -113,7 +113,7 @@ func TestFetchDir(t *testing.T) {
 			t.Fatalf("fail to generate remote files; %s", err)
 		}
 
-		err = scp.FetchDir(c, remoteDir, localDir, nil)
+		err = scp.NewSCP(c).FetchDir(remoteDir, localDir, nil)
 		if err != nil {
 			t.Errorf("fail to FetchDir; %s", err)
 		}

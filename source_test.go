@@ -58,7 +58,7 @@ func TestSendFile(t *testing.T) {
 			t.Fatalf("fail to generate local file; %s", err)
 		}
 
-		err = scp.SendFile(c, localPath, remotePath)
+		err = scp.NewSCP(c).SendFile(localPath, remotePath)
 		if err != nil {
 			t.Errorf("fail to CopyFileToRemote; %s", err)
 		}
@@ -75,7 +75,7 @@ func TestSendFile(t *testing.T) {
 			t.Fatalf("fail to generate local file; %s", err)
 		}
 
-		err = scp.SendFile(c, localPath, remotePath)
+		err = scp.NewSCP(c).SendFile(localPath, remotePath)
 		if err != nil {
 			t.Errorf("fail to SendFile; %s", err)
 		}
@@ -126,7 +126,7 @@ func TestSendDir(t *testing.T) {
 			t.Fatalf("fail to generate local files; %s", err)
 		}
 
-		err = scp.SendDir(c, localDir, remoteDir, nil)
+		err = scp.NewSCP(c).SendDir(localDir, remoteDir, nil)
 		if err != nil {
 			t.Errorf("fail to SendDir; %s", err)
 		}
