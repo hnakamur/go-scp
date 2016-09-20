@@ -9,14 +9,14 @@ import (
 	scp "github.com/hnakamur/go-scp"
 )
 
-func TestFetchFile(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-TestFetchFile-local")
+func TestReceiveFile(t *testing.T) {
+	localDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-local")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
 	defer os.RemoveAll(localDir)
 
-	remoteDir, err := ioutil.TempDir("", "go-scp-TestFetchFile-remote")
+	remoteDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-remote")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
@@ -45,9 +45,9 @@ func TestFetchFile(t *testing.T) {
 			t.Fatalf("fail to generate remote file; %s", err)
 		}
 
-		err = scp.NewSCP(c).FetchFile(remotePath, localPath)
+		err = scp.NewSCP(c).ReceiveFile(remotePath, localPath)
 		if err != nil {
-			t.Errorf("fail to FetchFile; %s", err)
+			t.Errorf("fail to ReceiveFile; %s", err)
 		}
 		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName)
 	})
@@ -62,22 +62,22 @@ func TestFetchFile(t *testing.T) {
 			t.Fatalf("fail to generate remote file; %s", err)
 		}
 
-		err = scp.NewSCP(c).FetchFile(remotePath, localPath)
+		err = scp.NewSCP(c).ReceiveFile(remotePath, localPath)
 		if err != nil {
-			t.Errorf("fail to FetchFile; %s", err)
+			t.Errorf("fail to ReceiveFile; %s", err)
 		}
 		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName)
 	})
 }
 
-func TestFetchDir(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-TestFetchDir-local")
+func TestReceiveDir(t *testing.T) {
+	localDir, err := ioutil.TempDir("", "go-scp-TestReceiveDir-local")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
 	defer os.RemoveAll(localDir)
 
-	remoteDir, err := ioutil.TempDir("", "go-scp-TestFetchDir-remote")
+	remoteDir, err := ioutil.TempDir("", "go-scp-TestReceiveDir-remote")
 	if err != nil {
 		t.Fatalf("fail to get tempdir; %s", err)
 	}
@@ -113,9 +113,9 @@ func TestFetchDir(t *testing.T) {
 			t.Fatalf("fail to generate remote files; %s", err)
 		}
 
-		err = scp.NewSCP(c).FetchDir(remoteDir, localDir, nil)
+		err = scp.NewSCP(c).ReceiveDir(remoteDir, localDir, nil)
 		if err != nil {
-			t.Errorf("fail to FetchDir; %s", err)
+			t.Errorf("fail to ReceiveDir; %s", err)
 		}
 		sameDirTreeContent(t, remoteDir, localDir)
 	})

@@ -11,10 +11,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Fetch copies a single remote file to the specified writer
+// Receive copies a single remote file to the specified writer
 // and returns the file information. The actual type of the file information is
 // scp.FileInfo, and you can get the access time with fileInfo.(*scp.FileInfo).AccessTime().
-func (s *SCP) Fetch(remoteFilename string, dest io.Writer) (os.FileInfo, error) {
+func (s *SCP) Receive(remoteFilename string, dest io.Writer) (os.FileInfo, error) {
 	var info os.FileInfo
 	err := runSinkSession(s.client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
@@ -47,10 +47,10 @@ func (s *SCP) Fetch(remoteFilename string, dest io.Writer) (os.FileInfo, error) 
 	return info, err
 }
 
-// FetchFile copies a single remote file to the local machine with
+// ReceiveFile copies a single remote file to the local machine with
 // the specified name. The time and permission will be set to the same value
 // of the source file.
-func (s *SCP) FetchFile(remoteFilename, localFilename string) error {
+func (s *SCP) ReceiveFile(remoteFilename, localFilename string) error {
 	remoteFilename = filepath.Clean(remoteFilename)
 	localFilename = filepath.Clean(localFilename)
 
@@ -103,12 +103,12 @@ func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader tim
 	return nil
 }
 
-// FetchDir copies files and directories under a remote srcDir to
+// ReceiveDir copies files and directories under a remote srcDir to
 // to the destDir on the local machine. You can filter the files and directories
 // to be copied with acceptFn. If acceptFn is nil, all files and directories will
 // be copied. The time and permission will be set to the same value of the source
 // file or directory.
-func (s *SCP) FetchDir(srcDir, destDir string, acceptFn AcceptFunc) error {
+func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
 
