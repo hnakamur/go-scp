@@ -63,8 +63,8 @@ func SendFile(client *ssh.Client, localFilename, remoteFilename string) error {
 
 // AcceptFunc is the type of the function called for each file or directory
 // to determine whether is should be copied or not.
-// In CopyRecursivelyToRemote, parentDir will be a directory under srcDir.
-// In CopyRecursivelyFromRemote, parentDir will be a directory under destDir.
+// In SendDir, parentDir will be a directory under srcDir.
+// In FetchDir, parentDir will be a directory under destDir.
 type AcceptFunc func(parentDir string, info os.FileInfo) (bool, error)
 
 func acceptAny(parentDir string, info os.FileInfo) (bool, error) {
