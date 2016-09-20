@@ -11,16 +11,16 @@ import (
 )
 
 // Send reads a single local file content from the r,
-// and copies it to the remote file with the name remoteFilename.
+// and copies it to the remote file with the name destFile.
 // The time and permission will be set with the value of info.
 // The r will be closed after copying. If you don't want for r to be
 // closed, you can pass the result of ioutil.NopCloser(r).
-func (s *SCP) Send(info *FileInfo, r io.ReadCloser, remoteFilename string) error {
-	remoteFilename = filepath.Clean(remoteFilename)
-	destDir := filepath.Dir(remoteFilename)
-	destFilename := filepath.Base(remoteFilename)
-	if info.name != destFilename {
-		info = NewFileInfo(destFilename, info.size, info.mode, info.modTime, info.accessTime)
+func (s *SCP) Send(info *FileInfo, r io.ReadCloser, destFile string) error {
+	destFile = filepath.Clean(destFile)
+	destDir := filepath.Dir(destFile)
+	destBaseFilename := filepath.Base(destFile)
+	if info.name != destBaseFilename {
+		info = NewFileInfo(destBaseFilename, info.size, info.mode, info.modTime, info.accessTime)
 	}
 
 	return runSourceSession(s.client, destDir, true, "", false, true, func(s *sourceSession) error {
@@ -34,21 +34,21 @@ func (s *SCP) Send(info *FileInfo, r io.ReadCloser, remoteFilename string) error
 
 // SendFile copies a single local file to the remote server.
 // The time and permission will be set with the value of the source file.
-func (s *SCP) SendFile(localFilename, remoteFilename string) error {
-	localFilename = filepath.Clean(localFilename)
-	remoteFilename = filepath.Clean(remoteFilename)
+func (s *SCP) SendFile(srcFile, destFile string) error {
+	srcFile = filepath.Clean(srcFile)
+	destFile = filepath.Clean(destFile)
 
-	destDir := filepath.Dir(remoteFilename)
-	destFilename := filepath.Base(remoteFilename)
+	destDir := filepath.Dir(destFile)
+	destBaseFilename := filepath.Base(destFile)
 
 	return runSourceSession(s.client, destDir, true, "", false, true, func(s *sourceSession) error {
-		osFileInfo, err := os.Stat(localFilename)
+		osFileInfo, err := os.Stat(srcFile)
 		if err != nil {
 			return fmt.Errorf("failed to stat source file: err=%s", err)
 		}
-		fi := newFileInfoFromOS(osFileInfo, destFilename)
+		fi := newFileInfoFromOS(osFileInfo, destBaseFilename)
 
-		file, err := os.Open(localFilename)
+		file, err := os.Open(srcFile)
 		if err != nil {
 			return fmt.Errorf("failed to open source file: err=%s", err)
 		}

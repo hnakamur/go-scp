@@ -14,9 +14,9 @@ import (
 // Receive copies a single remote file to the specified writer
 // and returns the file information. The actual type of the file information is
 // scp.FileInfo, and you can get the access time with fileInfo.(*scp.FileInfo).AccessTime().
-func (s *SCP) Receive(remoteFilename string, dest io.Writer) (os.FileInfo, error) {
+func (s *SCP) Receive(srcFile string, dest io.Writer) (os.FileInfo, error) {
 	var info os.FileInfo
-	err := runSinkSession(s.client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
+	err := runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
@@ -41,7 +41,7 @@ func (s *SCP) Receive(remoteFilename string, dest io.Writer) (os.FileInfo, error
 			return fmt.Errorf("failed to copy file: err=%s", err)
 		}
 
-		info = NewFileInfo(remoteFilename, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+		info = NewFileInfo(srcFile, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
 		return nil
 	})
 	return info, err
@@ -50,11 +50,11 @@ func (s *SCP) Receive(remoteFilename string, dest io.Writer) (os.FileInfo, error
 // ReceiveFile copies a single remote file to the local machine with
 // the specified name. The time and permission will be set to the same value
 // of the source file.
-func (s *SCP) ReceiveFile(remoteFilename, localFilename string) error {
-	remoteFilename = filepath.Clean(remoteFilename)
-	localFilename = filepath.Clean(localFilename)
+func (s *SCP) ReceiveFile(srcFile, destFile string) error {
+	srcFile = filepath.Clean(srcFile)
+	destFile = filepath.Clean(destFile)
 
-	return runSinkSession(s.client, remoteFilename, false, "", false, true, func(s *sinkSession) error {
+	return runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
 			return fmt.Errorf("failed to read scp message header: err=%s", err)
@@ -73,7 +73,7 @@ func (s *SCP) ReceiveFile(remoteFilename, localFilename string) error {
 			return fmt.Errorf("expected file message header, got %+v", h)
 		}
 
-		return copyFileBodyFromRemote(s, localFilename, timeHeader, fileHeader)
+		return copyFileBodyFromRemote(s, destFile, timeHeader, fileHeader)
 	})
 }
 
