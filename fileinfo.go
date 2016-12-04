@@ -3,7 +3,6 @@ package scp
 import (
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 )
 
@@ -26,26 +25,6 @@ func NewFileInfo(name string, size int64, mode os.FileMode, modTime, accessTime 
 		modTime:    modTime,
 		accessTime: accessTime,
 	}
-}
-
-func newFileInfoFromOS(fi os.FileInfo, replaceName string) *FileInfo {
-	var name string
-	if replaceName == "" {
-		name = fi.Name()
-	} else {
-		name = replaceName
-	}
-
-	modTime := fi.ModTime()
-
-	var accessTime time.Time
-	sysStat, ok := fi.Sys().(*syscall.Stat_t)
-	if ok {
-		sec, nsec := sysStat.Atim.Unix()
-		accessTime = time.Unix(sec, nsec)
-	}
-
-	return NewFileInfo(name, fi.Size(), fi.Mode(), modTime, accessTime)
 }
 
 // Name returns base name of the file.
