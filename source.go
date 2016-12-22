@@ -78,14 +78,16 @@ func acceptAny(parentDir string, info os.FileInfo) (bool, error) {
 // it is better to use another method like the tar command.
 // If acceptFn is nil, all files and directories will be copied.
 // The time and permission will be set to the same value of the source file or directory.
+// If trailing slash(end with '/'), so only upload the contents,if else, creating the source directory name first.
 func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
+	tail := destDir[len(destDir)-1]
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
 	if acceptFn == nil {
 		acceptFn = acceptAny
 	}
 
-	return runSourceSession(s.client, destDir, true, "", true, true, func(s *sourceSession) error {
+	uploadEntries := func(s *sourceSession) error {
 		endDirectories := func(prevDir, dir string) ([]string, error) {
 			rel, err := filepath.Rel(prevDir, dir)
 			if err != nil {
@@ -171,7 +173,35 @@ func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 			return err
 		}
 		return nil
-	})
+	}
+
+	if tail != '/' {
+		scpFunc := uploadEntries
+
+		// No trailing slash, creating the source directory name
+		uploadEntries = func(s *sourceSession) error {
+			info, err := os.Stat(srcDir)
+			if err != nil {
+				return err
+			}
+
+			err = s.StartDirectory(newFileInfoFromOS(info, ""))
+			if err != nil {
+				return err
+			}
+
+			err = scpFunc(s)
+			if err != nil {
+				return err
+			}
+
+			err = s.EndDirectory()
+
+			return err
+		}
+	}
+
+	return runSourceSession(s.client, destDir, true, "", true, true, uploadEntries)
 }
 
 type sourceSession struct {
