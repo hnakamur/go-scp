@@ -53,6 +53,13 @@ func (s *SCP) Receive(srcFile string, dest io.Writer) (os.FileInfo, error) {
 func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 	srcFile = filepath.Clean(srcFile)
 	destFile = filepath.Clean(destFile)
+	fiDest, err := os.Stat(destFile)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to get information of destnation file: err=%s", err)
+	}
+	if err == nil && fiDest.IsDir() {
+		destFile = filepath.Join(destFile, filepath.Base(srcFile))
+	}
 
 	return runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
 		h, err := s.ReadHeaderOrReply()
