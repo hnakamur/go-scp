@@ -53,6 +53,13 @@ func (s *SCP) Receive(srcFile string, dest io.Writer) (os.FileInfo, error) {
 func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 	srcFile = filepath.Clean(srcFile)
 	destFile = filepath.Clean(destFile)
+	fiDest, err := os.Stat(destFile)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to get information of destnation file: err=%s", err)
+	}
+	if err == nil && fiDest.IsDir() {
+		destFile = filepath.Join(destFile, filepath.Base(srcFile))
+	}
 
 	return runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
 		h, err := s.ReadHeaderOrReply()
@@ -111,12 +118,24 @@ func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader tim
 func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 	srcDir = filepath.Clean(srcDir)
 	destDir = filepath.Clean(destDir)
+	_, err := os.Stat(destDir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to get information of destination directory: err=%s", err)
+	}
+	var skipsFirstDirectory bool
+	if os.IsNotExist(err) {
+		skipsFirstDirectory = true
+		err = os.MkdirAll(destDir, 0777)
+		if err != nil {
+			return fmt.Errorf("failed to create destination directory: err=%s", err)
+		}
+	}
 
 	if acceptFn == nil {
 		acceptFn = acceptAny
 	}
 
-	return runSinkSession(s.client, srcDir, true, "", true, true, func(s *sinkSession) error {
+	return runSinkSession(s.client, srcDir, false, "", true, true, func(s *sinkSession) error {
 		curDir := destDir
 		var timeHeader timeMsgHeader
 		var timeHeaders []timeMsgHeader
@@ -133,12 +152,15 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 			case timeMsgHeader:
 				timeHeader = h.(timeMsgHeader)
 			case startDirectoryMsgHeader:
+				dirHeader := h.(startDirectoryMsgHeader)
+
 				if isFirstStartDirectory {
 					isFirstStartDirectory = false
-					continue
+					if skipsFirstDirectory {
+						continue
+					}
 				}
 
-				dirHeader := h.(startDirectoryMsgHeader)
 				curDir = filepath.Join(curDir, dirHeader.Name)
 				timeHeaders = append(timeHeaders, timeHeader)
 
