@@ -17,13 +17,9 @@ import (
 // closed, you can pass the result of ioutil.NopCloser(r).
 func (s *SCP) Send(info *FileInfo, r io.ReadCloser, destFile string) error {
 	destFile = filepath.Clean(destFile)
-	destDir := filepath.Dir(destFile)
-	destBaseFilename := filepath.Base(destFile)
-	if info.name != destBaseFilename {
-		info = NewFileInfo(destBaseFilename, info.size, info.mode, info.modTime, info.accessTime)
-	}
+	destFile = filepath.Dir(destFile)
 
-	return runSourceSession(s.client, destDir, true, "", false, true, func(s *sourceSession) error {
+	return runSourceSession(s.client, destFile, false, "", false, true, func(s *sourceSession) error {
 		err := s.WriteFile(info, r)
 		if err != nil {
 			return fmt.Errorf("failed to copy file: err=%s", err)
@@ -38,15 +34,12 @@ func (s *SCP) SendFile(srcFile, destFile string) error {
 	srcFile = filepath.Clean(srcFile)
 	destFile = filepath.Clean(destFile)
 
-	destDir := filepath.Dir(destFile)
-	destBaseFilename := filepath.Base(destFile)
-
-	return runSourceSession(s.client, destDir, true, "", false, true, func(s *sourceSession) error {
+	return runSourceSession(s.client, destFile, false, "", false, true, func(s *sourceSession) error {
 		osFileInfo, err := os.Stat(srcFile)
 		if err != nil {
 			return fmt.Errorf("failed to stat source file: err=%s", err)
 		}
-		fi := newFileInfoFromOS(osFileInfo, destBaseFilename)
+		fi := newFileInfoFromOS(osFileInfo, "")
 
 		file, err := os.Open(srcFile)
 		if err != nil {
