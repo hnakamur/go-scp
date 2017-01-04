@@ -78,35 +78,25 @@ func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 		acceptFn = acceptAny
 	}
 
-	return runSourceSession(s.client, destDir, true, "", true, true, func(s *sourceSession) error {
-		endDirectories := func(prevDir, dir string) ([]string, error) {
+	return runSourceSession(s.client, destDir, false, "", true, true, func(s *sourceSession) error {
+		endDirectories := func(prevDir, dir string) error {
 			rel, err := filepath.Rel(prevDir, dir)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			var dirs []string
 			for _, comp := range strings.Split(rel, string([]rune{filepath.Separator})) {
 				if comp == ".." {
 					err := s.EndDirectory()
 					if err != nil {
-						return nil, err
+						return err
 					}
-				} else if comp == "." {
-					continue
-				} else {
-					dirs = append(dirs, comp)
 				}
 			}
-			return dirs, nil
+			return nil
 		}
 
-		isSrcDir := true
 		prevDir := srcDir
 		myWalkFn := func(path string, info os.FileInfo, err error) error {
-			if isSrcDir {
-				isSrcDir = false
-			}
-
 			isDir := info.IsDir()
 			var dir string
 			if isDir {
@@ -114,42 +104,41 @@ func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 			} else {
 				dir = filepath.Dir(path)
 			}
-
-			newDirs, err := endDirectories(prevDir, dir)
-			if err != nil {
-				return err
-			}
-
-			scpFileInfo := newFileInfoFromOS(info, path)
-			accepted, err := acceptFn(filepath.Dir(path), scpFileInfo)
-			if err != nil {
-				return err
-			}
-			if isDir && !accepted {
-				return filepath.SkipDir
-			}
-
 			defer func() {
 				prevDir = dir
 			}()
 
-			for _, newDir := range newDirs {
-				fi := newFileInfoFromOS(info, newDir)
-				err := s.StartDirectory(fi)
-				if err != nil {
-					return err
-				}
+			err = endDirectories(prevDir, dir)
+			if err != nil {
+				return err
 			}
 
-			if !isDir && accepted {
-				fi := newFileInfoFromOS(info, "")
-				file, err := os.Open(path)
+			scpFileInfo := newFileInfoFromOS(info, "")
+			accepted, err := acceptFn(filepath.Dir(path), scpFileInfo)
+			if err != nil {
+				return err
+			}
+
+			if isDir {
+				if !accepted {
+					return filepath.SkipDir
+				}
+
+				err := s.StartDirectory(scpFileInfo)
 				if err != nil {
 					return err
 				}
-				err = s.WriteFile(fi, file)
-				if err != nil {
-					return err
+			} else {
+				if accepted {
+					fi := newFileInfoFromOS(info, "")
+					file, err := os.Open(path)
+					if err != nil {
+						return err
+					}
+					err = s.WriteFile(fi, file)
+					if err != nil {
+						return err
+					}
 				}
 			}
 			return nil
@@ -159,11 +148,7 @@ func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 			return err
 		}
 
-		_, err = endDirectories(prevDir, srcDir)
-		if err != nil {
-			return err
-		}
-		return nil
+		return endDirectories(prevDir, srcDir)
 	})
 }
 
