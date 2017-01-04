@@ -10,18 +10,6 @@ import (
 )
 
 func TestReceiveFile(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-local")
-	if err != nil {
-		t.Fatalf("fail to get tempdir; %s", err)
-	}
-	defer os.RemoveAll(localDir)
-
-	remoteDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-remote")
-	if err != nil {
-		t.Fatalf("fail to get tempdir; %s", err)
-	}
-	defer os.RemoveAll(remoteDir)
-
 	s, l, err := newTestSshdServer()
 	if err != nil {
 		t.Fatalf("fail to create test sshd server; %s", err)
@@ -36,6 +24,18 @@ func TestReceiveFile(t *testing.T) {
 	defer c.Close()
 
 	t.Run("Random sized file", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
 		remoteName := "src.dat"
 		localName := "dest.dat"
 		remotePath := filepath.Join(remoteDir, remoteName)
@@ -53,6 +53,18 @@ func TestReceiveFile(t *testing.T) {
 	})
 
 	t.Run("Empty file", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
 		remoteName := "src.dat"
 		localName := "dest.dat"
 		remotePath := filepath.Join(remoteDir, remoteName)
@@ -67,6 +79,33 @@ func TestReceiveFile(t *testing.T) {
 			t.Errorf("fail to ReceiveFile; %s", err)
 		}
 		sameFileInfoAndContent(t, localDir, remoteDir, localName, remoteName)
+	})
+
+	t.Run("Dest is existing dir", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		remoteName := "src.dat"
+		remotePath := filepath.Join(remoteDir, remoteName)
+		err = generateRandomFileWithSize(remotePath, 0)
+		if err != nil {
+			t.Fatalf("fail to generate remote file; %s", err)
+		}
+
+		err = scp.NewSCP(c).ReceiveFile(remotePath, localDir)
+		if err != nil {
+			t.Errorf("fail to ReceiveFile; %s", err)
+		}
+		sameDirTreeContent(t, remoteDir, localDir)
 	})
 }
 
