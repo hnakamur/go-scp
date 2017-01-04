@@ -35,7 +35,7 @@ func TestSendFile(t *testing.T) {
 	}
 	defer os.RemoveAll(remoteDir)
 
-	s, l, err := newTestSshdServer(remoteDir)
+	s, l, err := newTestSshdServer()
 	if err != nil {
 		t.Fatalf("fail to create test sshd server; %s", err)
 	}
@@ -84,19 +84,7 @@ func TestSendFile(t *testing.T) {
 }
 
 func TestSendDir(t *testing.T) {
-	localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
-	if err != nil {
-		t.Fatalf("fail to get tempdir; %s", err)
-	}
-	defer os.RemoveAll(localDir)
-
-	remoteDir, err := ioutil.TempDir("", "go-scp-TestSendDir-remote")
-	if err != nil {
-		t.Fatalf("fail to get tempdir; %s", err)
-	}
-	defer os.RemoveAll(remoteDir)
-
-	s, l, err := newTestSshdServer(remoteDir)
+	s, l, err := newTestSshdServer()
 	if err != nil {
 		t.Fatalf("fail to create test sshd server; %s", err)
 	}
@@ -109,7 +97,19 @@ func TestSendDir(t *testing.T) {
 	}
 	defer c.Close()
 
-	t.Run("copy all case 1", func(t *testing.T) {
+	t.Run("dest dir not exist", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestSendDir-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
 		entries := []fileInfo{
 			{name: "foo", maxSize: testMaxFileSize, mode: 0644},
 			{name: "bar", maxSize: testMaxFileSize, mode: 0600},
@@ -121,7 +121,44 @@ func TestSendDir(t *testing.T) {
 				},
 			},
 		}
-		err := generateRandomFiles(localDir, entries)
+		err = generateRandomFiles(localDir, entries)
+		if err != nil {
+			t.Fatalf("fail to generate local files; %s", err)
+		}
+
+		remoteDestDir := filepath.Join(remoteDir, "dest")
+		err = scp.NewSCP(c).SendDir(localDir, remoteDestDir, nil)
+		if err != nil {
+			t.Errorf("fail to SendDir; %s", err)
+		}
+		sameDirTreeContent(t, localDir, remoteDestDir)
+	})
+
+	t.Run("dest dir exists", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestSendDir-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		entries := []fileInfo{
+			{name: "foo", maxSize: testMaxFileSize, mode: 0644},
+			{name: "bar", maxSize: testMaxFileSize, mode: 0600},
+			{name: "baz", isDir: true, mode: 0755,
+				entries: []fileInfo{
+					{name: "foo", maxSize: testMaxFileSize, mode: 0400},
+					{name: "hoge", maxSize: testMaxFileSize, mode: 0602},
+					{name: "emptyDir", isDir: true, mode: 0500},
+				},
+			},
+		}
+		err = generateRandomFiles(localDir, entries)
 		if err != nil {
 			t.Fatalf("fail to generate local files; %s", err)
 		}
@@ -130,7 +167,9 @@ func TestSendDir(t *testing.T) {
 		if err != nil {
 			t.Errorf("fail to SendDir; %s", err)
 		}
-		sameDirTreeContent(t, localDir, remoteDir)
+		localDirBase := filepath.Base(localDir)
+		remoteDestDir := filepath.Join(remoteDir, localDirBase)
+		sameDirTreeContent(t, localDir, remoteDestDir)
 	})
 }
 
@@ -141,7 +180,7 @@ var (
 	testSshdShell    = "sh"
 )
 
-func newTestSshdServer(dir string) (*sshd.Server, net.Listener, error) {
+func newTestSshdServer() (*sshd.Server, net.Listener, error) {
 	config := &ssh.ServerConfig{
 		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
 			if c.User() == testSshdUser && string(pass) == testSshdPassword {
