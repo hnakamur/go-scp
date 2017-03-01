@@ -213,7 +213,7 @@ func TestSendDir(t *testing.T) {
 		sameDirTreeContent(t, localDir, remoteDestDir)
 	})
 
-	t.Run("send only files case #1", func(t *testing.T) {
+	t.Run("send only files case #1 dest dir exists", func(t *testing.T) {
 		localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
 		if err != nil {
 			t.Fatalf("fail to get tempdir; %s", err)
@@ -257,7 +257,7 @@ func TestSendDir(t *testing.T) {
 		sameDirTreeContent(t, localDir, remoteDestDir)
 	})
 
-	t.Run("send only files case #2", func(t *testing.T) {
+	t.Run("send only files case #2 dest dir exists", func(t *testing.T) {
 		localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
 		if err != nil {
 			t.Fatalf("fail to get tempdir; %s", err)
@@ -299,6 +299,93 @@ func TestSendDir(t *testing.T) {
 			t.Errorf("fail to remove directory; %s", err)
 		}
 		sameDirTreeContent(t, localDir, remoteDestDir)
+	})
+	t.Run("send only files case #3 dest dir not exists", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestSendDir-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+		remoteDir = filepath.Join(remoteDir, "dest")
+
+		entries := []fileInfo{
+			{name: "01_file", maxSize: testMaxFileSize, mode: 0644},
+			{name: "02_file", maxSize: testMaxFileSize, mode: 0600},
+			{name: "03_dir", isDir: true, mode: 0755,
+				entries: []fileInfo{
+					{name: "01_file", maxSize: testMaxFileSize, mode: 0600},
+					{name: "02_file", maxSize: testMaxFileSize, mode: 0600},
+				},
+			},
+		}
+		err = generateRandomFiles(localDir, entries)
+		if err != nil {
+			t.Fatalf("fail to generate local files; %s", err)
+		}
+
+		err = scp.NewSCP(c).SendDir(localDir, remoteDir, func(parentDir string, info os.FileInfo) (bool, error) {
+			current := filepath.Join(parentDir, info.Name())
+			return localDir == current || (localDir == parentDir && !info.IsDir()), nil
+		})
+		if err != nil {
+			t.Errorf("fail to SendDir; %s", err)
+		}
+
+		err = os.RemoveAll(filepath.Join(localDir, "03_dir"))
+		if err != nil {
+			t.Errorf("fail to remove directory; %s", err)
+		}
+		sameDirTreeContent(t, localDir, remoteDir)
+	})
+
+	t.Run("send only files case #4 dest dir not exists", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestSendDir-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+		remoteDir = filepath.Join(remoteDir, "dest")
+
+		entries := []fileInfo{
+			{name: "01_dir", isDir: true, mode: 0755,
+				entries: []fileInfo{
+					{name: "01_file", maxSize: testMaxFileSize, mode: 0600},
+					{name: "02_file", maxSize: testMaxFileSize, mode: 0600},
+				},
+			},
+			{name: "02_file", maxSize: testMaxFileSize, mode: 0644},
+			{name: "03_file", maxSize: testMaxFileSize, mode: 0600},
+		}
+		err = generateRandomFiles(localDir, entries)
+		if err != nil {
+			t.Fatalf("fail to generate local files; %s", err)
+		}
+
+		err = scp.NewSCP(c).SendDir(localDir, remoteDir, func(parentDir string, info os.FileInfo) (bool, error) {
+			current := filepath.Join(parentDir, info.Name())
+			return localDir == current || (localDir == parentDir && !info.IsDir()), nil
+		})
+		if err != nil {
+			t.Errorf("fail to SendDir; %s", err)
+		}
+
+		err = os.RemoveAll(filepath.Join(localDir, "01_dir"))
+		if err != nil {
+			t.Errorf("fail to remove directory; %s", err)
+		}
+		sameDirTreeContent(t, localDir, remoteDir)
 	})
 }
 
