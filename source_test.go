@@ -440,8 +440,9 @@ func generateTestSshdKey() ([]byte, error) {
 
 func newTestSshClient(addr string) (*ssh.Client, error) {
 	config := &ssh.ClientConfig{
-		User: testSshdUser,
-		Auth: []ssh.AuthMethod{ssh.Password(testSshdPassword)},
+		User:            testSshdUser,
+		Auth:            []ssh.AuthMethod{ssh.Password(testSshdPassword)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
 	return ssh.Dial("tcp", addr, config)
