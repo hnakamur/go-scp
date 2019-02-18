@@ -4,5 +4,8 @@ go-scp [![Build Status](https://travis-ci.org/hnakamur/go-scp.svg?branch=master)
 A scp client library written in Go.
 The remote server must have the scp command.
 
+## Example
+Please refer to [the example at godoc](https://godoc.org/github.com/hnakamur/go-scp#example-package).
+
 ## License
 MIT
