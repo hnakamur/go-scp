@@ -17,7 +17,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func ExampleSendFile() {
+func Example() {
 	generateTestSshdKey := func() ([]byte, error) {
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
