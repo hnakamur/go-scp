@@ -199,4 +199,32 @@ func TestReceiveDir(t *testing.T) {
 		localDestDir := filepath.Join(localDir, remoteDirBase)
 		sameDirTreeContent(t, remoteDir, localDestDir)
 	})
+
+	t.Run("deadlink", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestReceiveDir-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestReceiveDir-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		destFilename := filepath.Join(remoteDir, "non-existent-file")
+		err = os.Symlink(destFilename, filepath.Join(remoteDir, "dead-link"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = scp.NewSCP(c).ReceiveDir(remoteDir, localDir, nil)
+		if err != nil {
+			t.Errorf("fail to ReceiveDir; %s", err)
+		}
+		remoteDirBase := filepath.Base(remoteDir)
+		localDestDir := filepath.Join(localDir, remoteDirBase)
+		sameDirTreeContent(t, remoteDir, localDestDir)
+	})
 }
