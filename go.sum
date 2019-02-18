@@ -1,0 +1,6 @@
+github.com/hnakamur/go-sshd v0.0.0-20170228152141-dccc3399d26a h1:p8dbHRhXhPSwVZqk76FguLzyeCZuvCqFlaYSqXOzbyI=
+github.com/hnakamur/go-sshd v0.0.0-20170228152141-dccc3399d26a/go.mod h1:R+6I3EdoV6ofbNqJsArhT9+Pnu57DxtmDJAQfxkCbGo=
+github.com/kr/pty v1.1.3 h1:/Um6a/ZmD5tF7peoOJ5oN5KMQ0DrGVQSXLNwyckutPk=
+github.com/kr/pty v1.1.3/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
+golang.org/x/crypto v0.0.0-20190211182817-74369b46fc67 h1:ng3VDlRp5/DHpSWl02R4rM9I+8M2rhmsuLwAMmkLQWE=
+golang.org/x/crypto v0.0.0-20190211182817-74369b46fc67/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
