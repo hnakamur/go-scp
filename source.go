@@ -103,6 +103,12 @@ func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 
 		prevDir := srcDir
 		myWalkFn := func(path string, info os.FileInfo, err error) error {
+			// We must check err is not nil first.
+			// See https://golang.org/pkg/path/filepath/#WalkFunc
+			if err != nil {
+				return err
+			}
+
 			isDir := info.IsDir()
 			var dir string
 			if isDir {
