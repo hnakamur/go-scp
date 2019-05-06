@@ -14,8 +14,8 @@ import (
 // Receive copies a single remote file to the specified writer
 // and returns the file information. The actual type of the file information is
 // scp.FileInfo, and you can get the access time with fileInfo.(*scp.FileInfo).AccessTime().
-func (s *SCP) Receive(srcFile string, dest io.Writer) (os.FileInfo, error) {
-	var info os.FileInfo
+func (s *SCP) Receive(srcFile string, dest io.Writer) (*FileInfo, error) {
+	var info *FileInfo
 	srcFile = realPath(filepath.Clean(srcFile))
 	err := runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
@@ -62,27 +62,31 @@ func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 		destFile = filepath.Join(destFile, filepath.Base(srcFile))
 	}
 
-	return runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
-		h, err := s.ReadHeaderOrReply()
-		if err != nil {
-			return fmt.Errorf("failed to read scp message header: err=%s", err)
-		}
-		timeHeader, ok := h.(timeMsgHeader)
-		if !ok {
-			return fmt.Errorf("expected time message header, got %+v", h)
-		}
+	file, err := os.OpenFile(destFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return fmt.Errorf("failed to open destination file: err=%s", err)
+	}
 
-		h, err = s.ReadHeaderOrReply()
-		if err != nil {
-			return fmt.Errorf("failed to read scp message header: err=%s", err)
-		}
-		fileHeader, ok := h.(fileMsgHeader)
-		if !ok {
-			return fmt.Errorf("expected file message header, got %+v", h)
-		}
+	fi, err := s.Receive(srcFile, file)
+	if err != nil {
+		file.Close()
+		return err
+	}
 
-		return copyFileBodyFromRemote(s, destFile, timeHeader, fileHeader)
-	})
+	file.Close()
+
+	// adapt permissions and header based on the information from fi
+	err = os.Chmod(destFile, fi.Mode())
+	if err != nil {
+		return fmt.Errorf("failed to change file mode: err=%s", err)
+	}
+
+	err = os.Chtimes(destFile, fi.AccessTime(), fi.ModTime())
+	if err != nil {
+		return fmt.Errorf("failed to change file time: err=%s", err)
+	}
+
+	return nil
 }
 
 func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader timeMsgHeader, fileHeader fileMsgHeader) error {
