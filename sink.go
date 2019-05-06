@@ -19,30 +19,32 @@ func (s *SCP) Receive(srcFile string, dest io.Writer) (*FileInfo, error) {
 	srcFile = realPath(filepath.Clean(srcFile))
 	err := runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
-		h, err := s.ReadHeaderOrReply()
-		if err != nil {
-			return fmt.Errorf("failed to read scp message header: err=%s", err)
-		}
-		var ok bool
-		timeHeader, ok = h.(timeMsgHeader)
-		if !ok {
-			return fmt.Errorf("expected time message header, got %+v", h)
-		}
+		// loop over headers until we get the file content
+		for {
+			h, err := s.ReadHeaderOrReply()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("failed to read scp message header: err=%s", err)
+			}
 
-		h, err = s.ReadHeaderOrReply()
-		if err != nil {
-			return fmt.Errorf("failed to read scp message header: err=%s", err)
+			switch h.(type) {
+			case timeMsgHeader:
+				timeHeader = h.(timeMsgHeader)
+			case fileMsgHeader:
+				fileHeader := h.(fileMsgHeader)
+				info = NewFileInfo(srcFile, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+				err = s.CopyFileBodyTo(fileHeader, dest)
+				if err != nil {
+					return fmt.Errorf("failed to copy file: err=%s", err)
+				}
+				break
+			case okMsg:
+				// do nothing
+			default:
+				return fmt.Errorf("unexpected file message header, got %+v", h)
+			}
 		}
-		fileHeader, ok := h.(fileMsgHeader)
-		if !ok {
-			return fmt.Errorf("expected file message header, got %+v", h)
-		}
-		err = s.CopyFileBodyTo(fileHeader, dest)
-		if err != nil {
-			return fmt.Errorf("failed to copy file: err=%s", err)
-		}
-
-		info = NewFileInfo(srcFile, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
 		return nil
 	})
 	return info, err
