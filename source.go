@@ -19,7 +19,7 @@ func (s *SCP) Send(info *FileInfo, r io.ReadCloser, destFile string) error {
 	destFile = filepath.Clean(destFile)
 	destFile = realPath(filepath.Dir(destFile))
 
-	return runSourceSession(s.client, destFile, false, "", false, true, func(s *sourceSession) error {
+	return runSourceSession(s.client, destFile, false, s.SCPCommand, false, true, func(s *sourceSession) error {
 		err := s.WriteFile(info, r)
 		if err != nil {
 			return fmt.Errorf("failed to copy file: err=%s", err)
@@ -34,7 +34,7 @@ func (s *SCP) SendFile(srcFile, destFile string) error {
 	srcFile = filepath.Clean(srcFile)
 	destFile = realPath(filepath.Clean(destFile))
 
-	return runSourceSession(s.client, destFile, false, "", false, true, func(s *sourceSession) error {
+	return runSourceSession(s.client, destFile, false, s.SCPCommand, false, true, func(s *sourceSession) error {
 		osFileInfo, err := os.Stat(srcFile)
 		if err != nil {
 			return fmt.Errorf("failed to stat source file: err=%s", err)
@@ -78,7 +78,7 @@ func (s *SCP) SendDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 		acceptFn = acceptAny
 	}
 
-	return runSourceSession(s.client, destDir, false, "", true, true, func(s *sourceSession) error {
+	return runSourceSession(s.client, destDir, false, s.SCPCommand, true, true, func(s *sourceSession) error {
 		prevDirSkipped := false
 
 		endDirectories := func(prevDir, dir string) error {

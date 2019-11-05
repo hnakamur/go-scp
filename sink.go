@@ -17,7 +17,7 @@ import (
 func (s *SCP) Receive(srcFile string, dest io.Writer) (os.FileInfo, error) {
 	var info os.FileInfo
 	srcFile = realPath(filepath.Clean(srcFile))
-	err := runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
+	err := runSinkSession(s.client, srcFile, false, s.SCPCommand, false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
@@ -62,7 +62,7 @@ func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 		destFile = filepath.Join(destFile, filepath.Base(srcFile))
 	}
 
-	return runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
+	return runSinkSession(s.client, srcFile, false, s.SCPCommand, false, true, func(s *sinkSession) error {
 		h, err := s.ReadHeaderOrReply()
 		if err != nil {
 			return fmt.Errorf("failed to read scp message header: err=%s", err)
@@ -136,7 +136,7 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 		acceptFn = acceptAny
 	}
 
-	return runSinkSession(s.client, srcDir, false, "", true, true, func(s *sinkSession) error {
+	return runSinkSession(s.client, srcDir, false, s.SCPCommand, true, true, func(s *sinkSession) error {
 		curDir := destDir
 		var timeHeader timeMsgHeader
 		var timeHeaders []timeMsgHeader
