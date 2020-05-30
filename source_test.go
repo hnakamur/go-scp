@@ -387,6 +387,81 @@ func TestSendDir(t *testing.T) {
 		}
 		sameDirTreeContent(t, localDir, remoteDir)
 	})
+
+	t.Run("send dir of same name exists already in dest", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestSendDir-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		err = os.Mkdir(filepath.Join(remoteDir, "test"), 0755)
+		if err != nil {
+			t.Fatalf("fail to create remote sub directory; %s", err)
+		}
+
+		entries := []fileInfo{
+			{name: "test", isDir: true, mode: 0755,
+				entries: []fileInfo{
+					{name: "01_file", maxSize: testMaxFileSize, mode: 0600},
+				},
+			},
+		}
+		err = generateRandomFiles(localDir, entries)
+		if err != nil {
+			t.Fatalf("fail to generate local files; %s", err)
+		}
+
+		srcDir := filepath.Join(localDir, "test")
+		err = scp.NewSCP(c).SendDir(srcDir, remoteDir, func(parentDir string, info os.FileInfo) (bool, error) {
+			return true, nil
+		})
+		if err != nil {
+			t.Errorf("fail to SendDir; %s", err)
+		}
+
+		sameDirTreeContent(t, localDir, remoteDir)
+	})
+
+	t.Run("send dir of same name exists already in dest #2", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestSendDir-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestSendDir-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		err = os.Mkdir(filepath.Join(remoteDir, "test"), 0755)
+		if err != nil {
+			t.Fatalf("fail to create remote sub directory; %s", err)
+		}
+
+		err = os.Mkdir(filepath.Join(localDir, "test"), 0755)
+		if err != nil {
+			t.Fatalf("fail to create remote sub directory; %s", err)
+		}
+
+		srcDir := filepath.Join(localDir, "test")
+		err = scp.NewSCP(c).SendDir(srcDir, remoteDir, func(parentDir string, info os.FileInfo) (bool, error) {
+			return true, nil
+		})
+		if err != nil {
+			t.Errorf("fail to SendDir; %s", err)
+		}
+
+		sameDirTreeContent(t, localDir, remoteDir)
+	})
 }
 
 var (
