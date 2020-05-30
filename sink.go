@@ -17,7 +17,7 @@ import (
 func (s *SCP) Receive(srcFile string, dest io.Writer) (*FileInfo, error) {
 	var info *FileInfo
 	srcFile = realPath(filepath.Clean(srcFile))
-	err := runSinkSession(s.client, srcFile, false, "", false, true, func(s *sinkSession) error {
+	err := runSinkSession(s.client, srcFile, false, s.SCPCommand, false, true, func(s *sinkSession) error {
 		var timeHeader timeMsgHeader
 		// loop over headers until we get the file content
 		for {
@@ -68,14 +68,13 @@ func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open destination file: err=%s", err)
 	}
+	defer file.Close()
 
 	fi, err := s.Receive(srcFile, file)
 	if err != nil {
 		file.Close()
 		return err
 	}
-
-	file.Close()
 
 	// adapt permissions and header based on the information from fi
 	err = os.Chmod(destFile, fi.Mode())
@@ -142,7 +141,7 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 		acceptFn = acceptAny
 	}
 
-	return runSinkSession(s.client, srcDir, false, "", true, true, func(s *sinkSession) error {
+	return runSinkSession(s.client, srcDir, false, s.SCPCommand, true, true, func(s *sinkSession) error {
 		curDir := destDir
 		var timeHeader timeMsgHeader
 		var timeHeaders []timeMsgHeader
