@@ -3,6 +3,7 @@
 package scp_test
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -24,6 +25,38 @@ func TestReceiveFile(t *testing.T) {
 		t.Fatalf("fail to serve test sshd server; %s", err)
 	}
 	defer c.Close()
+
+	t.Run("Receive sized file into memory", func(t *testing.T) {
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestReceive-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		remoteName := "src.dat"
+		remotePath := filepath.Join(remoteDir, remoteName)
+
+		err = generateRandomFile(remotePath)
+		if err != nil {
+			t.Fatalf("fail to generate remote file; %s", err)
+		}
+
+		buf := bytes.Buffer{}
+		_, err = scp.NewSCP(c).Receive(remotePath, &buf)
+		if err != nil {
+			t.Errorf("fail to Receive; %s", err)
+		}
+
+		expected, err := ioutil.ReadFile(remotePath)
+		if err != nil {
+			t.Fatalf("fail to stat file %s; %s", remotePath, err)
+		}
+
+		current := buf.Bytes()
+		if !bytes.Equal(current, expected) {
+			t.Error("unmatch file content")
+		}
+	})
 
 	t.Run("Random sized file", func(t *testing.T) {
 		localDir, err := ioutil.TempDir("", "go-scp-TestReceiveFile-local")
