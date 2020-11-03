@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -193,13 +194,18 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 	switch b {
 	case msgCopyFile:
 		var h fileMsgHeader
-		n, err := fmt.Fscanf(s.remReader, "%04o %d %s\n", &h.Mode, &h.Size, &h.Name)
+		n, err := fmt.Fscanf(s.remReader, "%04o %d ", &h.Mode, &h.Size)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read scp file message header: err=%s", err)
 		}
-		if n != 3 {
-			return nil, fmt.Errorf("unexpected count in reading file message header: n=%d", 3)
+		if n != 2 {
+			return nil, fmt.Errorf("unexpected count in reading file message header: n=%d", n)
 		}
+		name, err := s.remReader.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("failed to read scp file message header: err=%s", err)
+		}
+		h.Name = strings.TrimSuffix(name, "\n")
 
 		err = s.WriteReplyOK()
 		if err != nil {
@@ -210,13 +216,18 @@ func (s *sinkProtocol) ReadHeaderOrReply() (interface{}, error) {
 	case msgStartDirectory:
 		var h startDirectoryMsgHeader
 		var dummySize int64
-		n, err := fmt.Fscanf(s.remReader, "%04o %d %s\n", &h.Mode, &dummySize, &h.Name)
+		n, err := fmt.Fscanf(s.remReader, "%04o %d ", &h.Mode, &dummySize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read scp start directory message header: err=%s", err)
 		}
-		if n != 3 {
-			return nil, fmt.Errorf("unexpected count in reading start directory message header: n=%d", 3)
+		if n != 2 {
+			return nil, fmt.Errorf("unexpected count in reading start directory message header: n=%d", n)
 		}
+		name, err := s.remReader.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("failed to read scp directory message header: err=%s", err)
+		}
+		h.Name = strings.TrimSuffix(name, "\n")
 
 		err = s.WriteReplyOK()
 		if err != nil {
