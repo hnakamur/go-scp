@@ -232,4 +232,41 @@ func TestReceiveDir(t *testing.T) {
 		localDestDir := filepath.Join(localDir, remoteDirBase)
 		sameDirTreeContent(t, remoteDir, localDestDir)
 	})
+
+	t.Run("dest dir not exist filename with space", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestReceiveDir-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestReceiveDir-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		entries := []fileInfo{
+			{name: "foo 1", maxSize: testMaxFileSize, mode: 0644},
+			{name: "bar", maxSize: testMaxFileSize, mode: 0600},
+			{name: "baz 2", isDir: true, mode: 0755,
+				entries: []fileInfo{
+					{name: "foo", maxSize: testMaxFileSize, mode: 0400},
+					{name: "hoge", maxSize: testMaxFileSize, mode: 0602},
+					{name: "emptyDir", isDir: true, mode: 0500},
+				},
+			},
+		}
+		err = generateRandomFiles(remoteDir, entries)
+		if err != nil {
+			t.Fatalf("fail to generate remote files; %s", err)
+		}
+
+		localDestDir := filepath.Join(localDir, "dest")
+		err = scp.NewSCP(c).ReceiveDir(remoteDir, localDestDir, nil)
+		if err != nil {
+			t.Errorf("fail to ReceiveDir; %s", err)
+		}
+		sameDirTreeContent(t, remoteDir, localDestDir)
+	})
 }
