@@ -23,7 +23,7 @@ func (s *SCP) Send(info *FileInfo, r io.ReadCloser, destFile string) error {
 	return runSourceSession(s.client, destFile, false, s.SCPCommand, false, true, func(s *sourceSession) error {
 		err := s.WriteFile(info, r)
 		if err != nil {
-			return fmt.Errorf("failed to copy file: err=%s", err)
+			return fmt.Errorf("failed to copy file: %w", err)
 		}
 		return nil
 	})
@@ -38,18 +38,18 @@ func (s *SCP) SendFile(srcFile, destFile string) error {
 	return runSourceSession(s.client, destFile, false, s.SCPCommand, false, true, func(s *sourceSession) error {
 		osFileInfo, err := os.Stat(srcFile)
 		if err != nil {
-			return fmt.Errorf("failed to stat source file: err=%s", err)
+			return fmt.Errorf("failed to stat source file: %w", err)
 		}
 		fi := newFileInfoFromOS(osFileInfo, "")
 
 		file, err := os.Open(srcFile)
 		if err != nil {
-			return fmt.Errorf("failed to open source file: err=%s", err)
+			return fmt.Errorf("failed to open source file: %w", err)
 		}
 		// NOTE: file will be closed by WriteFile.
 		err = s.WriteFile(fi, file)
 		if err != nil {
-			return fmt.Errorf("failed to copy file: err=%s", err)
+			return fmt.Errorf("failed to copy file: %w", err)
 		}
 		return nil
 	})
@@ -61,7 +61,7 @@ func (s *SCP) SendFile(srcFile, destFile string) error {
 // In ReceiveDir, parentDir will be a directory under destDir.
 type AcceptFunc func(parentDir string, info os.FileInfo) (bool, error)
 
-func acceptAny(parentDir string, info os.FileInfo) (bool, error) {
+func acceptAny(string, os.FileInfo) (bool, error) {
 	return true, nil
 }
 

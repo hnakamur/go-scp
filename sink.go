@@ -25,7 +25,7 @@ func (s *SCP) Receive(srcFile string, dest io.Writer) (*FileInfo, error) {
 			if err == io.EOF {
 				break
 			} else if err != nil {
-				return fmt.Errorf("failed to read scp message header: err=%s", err)
+				return fmt.Errorf("failed to read scp message header: %w", err)
 			}
 
 			switch h.(type) {
@@ -36,7 +36,7 @@ func (s *SCP) Receive(srcFile string, dest io.Writer) (*FileInfo, error) {
 				info = NewFileInfo(srcFile, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
 				err = s.CopyFileBodyTo(fileHeader, dest)
 				if err != nil {
-					return fmt.Errorf("failed to copy file: err=%s", err)
+					return fmt.Errorf("failed to copy file: %w", err)
 				}
 				break
 			case okMsg:
@@ -58,7 +58,7 @@ func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 	destFile = filepath.Clean(destFile)
 	fiDest, err := os.Stat(destFile)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to get information of destnation file: err=%s", err)
+		return fmt.Errorf("failed to get information of destnation file: %w", err)
 	}
 	if err == nil && fiDest.IsDir() {
 		destFile = filepath.Join(destFile, filepath.Base(srcFile))
@@ -66,7 +66,7 @@ func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 
 	file, err := os.OpenFile(destFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return fmt.Errorf("failed to open destination file: err=%s", err)
+		return fmt.Errorf("failed to open destination file: %w", err)
 	}
 	defer file.Close()
 
@@ -79,12 +79,12 @@ func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 	// adapt permissions and header based on the information from fi
 	err = os.Chmod(destFile, fi.Mode())
 	if err != nil {
-		return fmt.Errorf("failed to change file mode: err=%s", err)
+		return fmt.Errorf("failed to change file mode: %w", err)
 	}
 
 	err = os.Chtimes(destFile, fi.AccessTime(), fi.ModTime())
 	if err != nil {
-		return fmt.Errorf("failed to change file time: err=%s", err)
+		return fmt.Errorf("failed to change file time: %w", err)
 	}
 
 	return nil
@@ -93,24 +93,24 @@ func (s *SCP) ReceiveFile(srcFile, destFile string) error {
 func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader timeMsgHeader, fileHeader fileMsgHeader) error {
 	file, err := os.OpenFile(localFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileHeader.Mode)
 	if err != nil {
-		return fmt.Errorf("failed to open destination file: err=%s", err)
+		return fmt.Errorf("failed to open destination file: %w", err)
 	}
 
 	err = s.CopyFileBodyTo(fileHeader, file)
 	if err != nil {
 		file.Close()
-		return fmt.Errorf("failed to copy file: err=%s", err)
+		return fmt.Errorf("failed to copy file: %w", err)
 	}
 	file.Close()
 
 	err = os.Chmod(localFilename, fileHeader.Mode)
 	if err != nil {
-		return fmt.Errorf("failed to change file mode: err=%s", err)
+		return fmt.Errorf("failed to change file mode: %w", err)
 	}
 
 	err = os.Chtimes(localFilename, timeHeader.Atime, timeHeader.Mtime)
 	if err != nil {
-		return fmt.Errorf("failed to change file time: err=%s", err)
+		return fmt.Errorf("failed to change file time: %w", err)
 	}
 
 	return nil
@@ -126,14 +126,14 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 	destDir = filepath.Clean(destDir)
 	_, err := os.Stat(destDir)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to get information of destination directory: err=%s", err)
+		return fmt.Errorf("failed to get information of destination directory: %w", err)
 	}
 	var skipsFirstDirectory bool
 	if os.IsNotExist(err) {
 		skipsFirstDirectory = true
 		err = os.MkdirAll(destDir, 0777)
 		if err != nil {
-			return fmt.Errorf("failed to create destination directory: err=%s", err)
+			return fmt.Errorf("failed to create destination directory: %w", err)
 		}
 	}
 
@@ -152,7 +152,7 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 			if err == io.EOF {
 				break
 			} else if err != nil {
-				return fmt.Errorf("failed to read scp message header: err=%s", err)
+				return fmt.Errorf("failed to read scp message header: %w", err)
 			}
 			switch h.(type) {
 			case timeMsgHeader:
@@ -177,7 +177,7 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 				info := NewFileInfo(dirHeader.Name, 0, dirHeader.Mode|os.ModeDir, timeHeader.Mtime, timeHeader.Atime)
 				accepted, err := acceptFn(filepath.Dir(curDir), info)
 				if err != nil {
-					return fmt.Errorf("error from accessFn: err=%s", err)
+					return fmt.Errorf("error from accessFn: %w", err)
 				}
 				if !accepted {
 					skipBaseDir = curDir
@@ -186,12 +186,12 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 
 				err = os.MkdirAll(curDir, dirHeader.Mode)
 				if err != nil {
-					return fmt.Errorf("failed to create directory: err=%s", err)
+					return fmt.Errorf("failed to create directory: %w", err)
 				}
 
 				err = os.Chmod(curDir, dirHeader.Mode)
 				if err != nil {
-					return fmt.Errorf("failed to change directory mode: err=%s", err)
+					return fmt.Errorf("failed to change directory mode: %w", err)
 				}
 			case endDirectoryMsgHeader:
 				if len(timeHeaders) > 0 {
@@ -200,7 +200,7 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 					if skipBaseDir == "" {
 						err := os.Chtimes(curDir, timeHeader.Atime, timeHeader.Mtime)
 						if err != nil {
-							return fmt.Errorf("failed to change directory time: err=%s", err)
+							return fmt.Errorf("failed to change directory time: %w", err)
 						}
 					}
 				}
@@ -213,7 +213,7 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 						var err error
 						sub, err = isSubdirectory(skipBaseDir, curDir)
 						if err != nil {
-							return fmt.Errorf("failed to check directory is subdirectory: err=%s", err)
+							return fmt.Errorf("failed to check directory is subdirectory: %w", err)
 						}
 					}
 					if !sub {
@@ -226,7 +226,7 @@ func (s *SCP) ReceiveDir(srcDir, destDir string, acceptFn AcceptFunc) error {
 					info := NewFileInfo(fileHeader.Name, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
 					accepted, err := acceptFn(curDir, info)
 					if err != nil {
-						return fmt.Errorf("error from accessFn: err=%s", err)
+						return fmt.Errorf("error from accessFn: %w", err)
 					}
 					if !accepted {
 						continue
