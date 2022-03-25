@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 package scp_test
@@ -76,6 +77,69 @@ func TestSend(t *testing.T) {
 		if err != nil {
 			t.Errorf("fail to Send; %s", err)
 		}
+		sameFileInfoAndContent(t, remoteDir, localDir, remoteName2, localName)
+	})
+}
+
+func TestSendOpen(t *testing.T) {
+	s, l, err := newTestSshdServer()
+	if err != nil {
+		t.Fatalf("fail to create test sshd server; %s", err)
+	}
+	defer s.Close()
+	go s.Serve(l)
+
+	c, err := newTestSshClient(l.Addr().String())
+	if err != nil {
+		t.Fatalf("fail to serve test sshd server; %s", err)
+	}
+	defer c.Close()
+
+	t.Run("Random sized file", func(t *testing.T) {
+		localDir, err := ioutil.TempDir("", "go-scp-TestSendOpen-local")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(localDir)
+
+		remoteDir, err := ioutil.TempDir("", "go-scp-TestSendOpen-remote")
+		if err != nil {
+			t.Fatalf("fail to get tempdir; %s", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		localName := "test1.dat"
+		remoteName := "dest.dat"
+		localPath := filepath.Join(localDir, localName)
+		remotePath := filepath.Join(remoteDir, remoteName)
+		err = generateRandomFile(localPath)
+		if err != nil {
+			t.Fatalf("fail to generate local file; %s", err)
+		}
+
+		localFile, err := os.Open(localPath)
+		if err != nil {
+			t.Fatalf("open local file; %s", err)
+		}
+		defer localFile.Close()
+
+		ofi, err := localFile.Stat()
+		if err != nil {
+			t.Fatalf("stat local file; %s", err)
+		}
+		remoteName2 := "dest2.dat"
+		fi := scp.NewFileInfo(remoteName2, ofi.Size(), ofi.Mode(), ofi.ModTime(), time.Now())
+		remoteWriter, err := scp.NewSCP(c).SendOpen(fi, remotePath)
+		defer remoteWriter.Close()
+		if err != nil {
+			t.Errorf("fail to Send; %s", err)
+		}
+
+		_, err = io.Copy(remoteWriter, localFile)
+		if err != nil {
+			t.Errorf("fail to copy from local write to remote writer; %s", err)
+		}
+
 		sameFileInfoAndContent(t, remoteDir, localDir, remoteName2, localName)
 	})
 }

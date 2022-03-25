@@ -78,11 +78,20 @@ func toSecondsAndMicroseconds(t time.Time) (seconds int64, microseconds int) {
 	return rounded.Unix(), rounded.Nanosecond() / int(int64(time.Microsecond)/int64(time.Nanosecond))
 }
 
-func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
+func (s *sourceProtocol) writeFileHeader(mode os.FileMode, length int64, filename string) error {
 	_, err := fmt.Fprintf(s.remIn, "%c%#4o %d %s\n", msgCopyFile, mode&os.ModePerm, length, filepath.Base(filename))
 	if err != nil {
 		return fmt.Errorf("failed to write scp file header: %w", err)
 	}
+	return nil
+}
+
+func (s *sourceProtocol) writeFile(mode os.FileMode, length int64, filename string, body io.ReadCloser) error {
+	err := s.writeFileHeader(mode, length, filename)
+	if err != nil {
+		return err
+	}
+
 	_, err = io.Copy(s.remIn, body)
 	// NOTE: We close body whether or not copy fails and ignore an error from closing body.
 	body.Close()
