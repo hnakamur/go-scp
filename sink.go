@@ -116,6 +116,102 @@ func copyFileBodyFromRemote(s *sinkSession, localFilename string, timeHeader tim
 	return nil
 }
 
+type receiveReader struct {
+	sink      *sinkSession
+	header    fileMsgHeader
+	reader    io.Reader
+	read      int64
+	completed bool
+}
+
+func (r *receiveReader) Read(p []byte) (int, error) {
+	if r.completed {
+		return 0, io.EOF
+	}
+
+	n, err := r.reader.Read(p)
+	r.read += int64(n)
+
+	if err == io.EOF {
+		if r.read != r.header.Size {
+			return 0, fmt.Errorf("unexpected EOF in read from scp remote file: %w", err)
+		}
+	} else if err != nil {
+		return n, fmt.Errorf("failed to read from scp remote file: %w", err)
+	}
+
+	// Send replyOK when read is complete and wait for close
+	if !r.completed && r.read == r.header.Size {
+		err = r.sink.WriteReplyOK()
+		if err != nil {
+			return n, fmt.Errorf("failed to write scp replyOK reply: %w", err)
+		}
+
+		err = r.sink.Wait()
+		if err != nil {
+			return n, fmt.Errorf("failed to wait for scp channel closing: %w", err)
+		}
+
+		r.completed = true
+	}
+
+	return n, err
+}
+
+func (r *receiveReader) Close() error {
+	return r.sink.Close()
+}
+
+// ReceiveOpen opens a single remote file as a io.ReadCloser and returns
+// the file information. In contrast to Receive, ReceiveOpen will return
+// when the remote file is ready to be read.
+// The caller of ReceiveOpen is responsible to invoke Close in the
+// returned io.ReadCloser.
+func (s *SCP) ReceiveOpen(srcFile string) (io.ReadCloser, *FileInfo, error) {
+	var info *FileInfo
+	srcFile = realPath(filepath.Clean(srcFile))
+
+	sink, err := newSinkSession(s.client, srcFile, false, s.SCPCommand, false, true)
+	// Caller is responsible to close sinkSession via closing the returned io.ReadCloser
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var timeHeader timeMsgHeader
+	// loop over headers until we get the file content
+	for {
+		h, err := sink.ReadHeaderOrReply()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, nil, fmt.Errorf("failed to read scp message header: %w", err)
+		}
+
+		switch h.(type) {
+		case timeMsgHeader:
+			timeHeader = h.(timeMsgHeader)
+		case fileMsgHeader:
+			fileHeader := h.(fileMsgHeader)
+			info = NewFileInfo(srcFile, fileHeader.Size, fileHeader.Mode, timeHeader.Mtime, timeHeader.Atime)
+			lr := io.LimitReader(sink.remReader, fileHeader.Size)
+
+			reader := &receiveReader{
+				sink:   sink,
+				header: fileHeader,
+				reader: lr,
+			}
+
+			return reader, info, nil
+		case okMsg:
+			// do nothing
+		default:
+			return nil, nil, fmt.Errorf("unexpected file message header, got %+v", h)
+		}
+	}
+
+	return nil, nil, fmt.Errorf("unexpected initialization to read scp file %s", srcFile)
+}
+
 // ReceiveDir copies files and directories under a remote srcDir to
 // to the destDir on the local machine. You can filter the files and directories
 // to be copied with acceptFn. If acceptFn is nil, all files and directories will
