@@ -55,6 +55,91 @@ func (s *SCP) SendFile(srcFile, destFile string) error {
 	})
 }
 
+type sendWriter struct {
+	source   *sourceSession
+	fileInfo *FileInfo
+	written  int64
+}
+
+var _ io.WriteCloser = &sendWriter{}
+
+func (s *sendWriter) Write(p []byte) (int, error) {
+	n, err := s.source.remIn.Write(p)
+	s.written += int64(n)
+	if err != nil {
+		return n, fmt.Errorf("failed to write scp file body: %w", err)
+	}
+
+	if s.written == s.fileInfo.size {
+		err = s.source.readReply()
+		if err != nil {
+			return n, err
+		}
+
+		_, err = s.source.remIn.Write([]byte{replyOK})
+		if err != nil {
+			return n, fmt.Errorf("failed to write scp replyOK reply: %w", err)
+		}
+
+		err = s.source.readReply()
+		if err != nil {
+			return n, err
+		}
+
+		err = s.source.CloseStdin()
+		if err != nil {
+			return n, err
+		}
+
+		err = s.source.Wait()
+		if err != nil {
+			return n, err
+		}
+	}
+
+	return n, err
+}
+
+func (s *sendWriter) Close() error {
+	return s.source.Close()
+}
+
+// SendOpen opens an io.WriteCloser to a file on the remote server.
+// SendOpen will write a known number of bytes according to fileInfo to the remote file.
+// The caller of SendOpen is responsible to close the returned io.WriteCloser.
+// Metadata such as modified time and mode/permission of the remote will is applied from fileInfo.
+func (s *SCP) SendOpen(fileInfo *FileInfo, destFile string) (io.WriteCloser, error) {
+	var err error
+
+	destFile = filepath.Clean(destFile)
+	destFile = realPath(filepath.Dir(destFile))
+
+	source, err := newSourceSession(s.client, destFile, false, s.SCPCommand, false, true)
+	// Caller is responsible to close sourceSession via closing the returned io.WriteCloser
+	if err != nil {
+		return nil, err
+	}
+
+	if !fileInfo.modTime.IsZero() || !fileInfo.accessTime.IsZero() {
+		err = source.setTime(fileInfo.modTime, fileInfo.accessTime)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = source.writeFileHeader(fileInfo.mode, fileInfo.size, fileInfo.name)
+	if err != nil {
+		return nil, err
+	}
+
+	writer := &sendWriter{
+		source:   source,
+		fileInfo: fileInfo,
+	}
+
+	return writer, nil
+}
+
 // AcceptFunc is the type of the function called for each file or directory
 // to determine whether is should be copied or not.
 // In SendDir, parentDir will be a directory under srcDir.
