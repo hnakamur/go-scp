@@ -18,6 +18,10 @@ import (
 )
 
 func Example() {
+	const exampleUser = "user1"
+	const examplePassword = "password1"
+	const exampleShell = "sh"
+
 	generateTestSshdKey := func() ([]byte, error) {
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
@@ -35,7 +39,7 @@ func Example() {
 	newTestSshdServer := func() (*sshd.Server, net.Listener, error) {
 		config := &ssh.ServerConfig{
 			PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-				if c.User() == testSshdUser && string(pass) == testSshdPassword {
+				if c.User() == exampleUser && string(pass) == examplePassword {
 					return nil, nil
 				}
 				return nil, fmt.Errorf("password rejected for %q", c.User())
@@ -52,7 +56,7 @@ func Example() {
 
 		config.AddHostKey(private)
 
-		server := sshd.NewServer(testSshdShell, config, nil)
+		server := sshd.NewServer(exampleShell, config, nil)
 		l, err := net.Listen("tcp", ":0")
 		if err != nil {
 			return nil, nil, err
@@ -68,8 +72,8 @@ func Example() {
 	go s.Serve(l)
 
 	config := &ssh.ClientConfig{
-		User:            testSshdUser,
-		Auth:            []ssh.AuthMethod{ssh.Password(testSshdPassword)},
+		User:            exampleUser,
+		Auth:            []ssh.AuthMethod{ssh.Password(examplePassword)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 	client, err := ssh.Dial("tcp", l.Addr().String(), config)
